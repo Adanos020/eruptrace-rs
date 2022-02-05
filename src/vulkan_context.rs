@@ -1,4 +1,5 @@
 use std::sync::Arc;
+
 use vulkano::device::physical::{PhysicalDevice, QueueFamily};
 use vulkano::device::{Device, DeviceExtensions, Features, QueuesIter};
 use vulkano::instance::Instance;
@@ -51,7 +52,7 @@ impl<'a> VulkanContext<'a> {
             .find(|qf| qf.supports_graphics())
             .expect("Cannot find a queue family that supports graphics.");
         let (device, queues) = Device::new(
-            physical_device.clone(),
+            physical_device,
             &Features::none(),
             &DeviceExtensions::none(),
             [(queue_family, 0.5)].iter().cloned(),

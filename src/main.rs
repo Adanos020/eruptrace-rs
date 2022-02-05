@@ -1,4 +1,3 @@
-use eruptrace_rs::colour::Colour;
 use eruptrace_rs::shaders::cs;
 use eruptrace_rs::vulkan_context::VulkanContext;
 
@@ -7,14 +6,17 @@ use std::sync::Arc;
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage};
 use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
+use vulkano::format::Format;
+use vulkano::image::view::ImageView;
+use vulkano::image::{ImageDimensions, StorageImage};
 use vulkano::instance::{Instance, InstanceExtensions};
 use vulkano::pipeline::{ComputePipeline, Pipeline, PipelineBindPoint};
 use vulkano::sync::GpuFuture;
 use vulkano::Version;
 
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::ControlFlow;
-use winit::{event_loop::EventLoop, window::WindowBuilder};
+use winit::event_loop::{ControlFlow, EventLoop};
+use winit::window::WindowBuilder;
 
 fn main() {
     let instance = Instance::new(None, Version::V1_5, &InstanceExtensions::none(), None)
@@ -25,15 +27,28 @@ fn main() {
         .next()
         .expect("Cannot pull the first queue.");
 
-    let image_buf = {
-        let image_iter = (0 .. 1024 * 1024).map(|_| Colour::BLACK);
+    let image = StorageImage::new(
+        Arc::clone(&vk_context.device),
+        ImageDimensions::Dim2d {
+            width: 1024,
+            height: 1024,
+            array_layers: 1,
+        },
+        Format::R8G8B8A8_UNORM,
+        Some(vk_context.queue_family),
+    )
+    .expect("Cannot create image.");
+    let image_view = ImageView::new(Arc::clone(&image)).expect("Cannot create image view.");
+
+    let out_buf = {
+        let out_iter = (0..1024 * 1024 * 4).map(|_| 0u8);
         CpuAccessibleBuffer::from_iter(
             Arc::clone(&vk_context.device),
             BufferUsage::all(),
             false,
-            image_iter,
+            out_iter,
         )
-        .expect("Cannot create data buffer.")
+        .expect("Cannot create output buffer.")
     };
 
     let shader = cs::load(Arc::clone(&vk_context.device)).expect("Cannot load shader.");
@@ -54,10 +69,10 @@ fn main() {
             .descriptor_set_layouts()
             .get(0)
             .expect("Could not get descriptor set #0.");
-        let data_buf = Arc::clone(&image_buf);
+        let image_view = Arc::clone(&image_view);
         PersistentDescriptorSet::new(
             Arc::clone(layout),
-            [WriteDescriptorSet::buffer(0, data_buf)],
+            [WriteDescriptorSet::image_view(0, image_view)],
         )
         .expect("Cannot build descriptor set.")
     };
@@ -69,6 +84,8 @@ fn main() {
             CommandBufferUsage::OneTimeSubmit,
         )
         .expect("Cannot create command buffer builder");
+        let image = Arc::clone(&image);
+        let out_buf = Arc::clone(&out_buf);
         cb_builder
             .bind_pipeline_compute(Arc::clone(&pipeline))
             .bind_descriptor_sets(
@@ -77,8 +94,10 @@ fn main() {
                 0,
                 dset,
             )
-            .dispatch([16384, 1, 1])
-            .expect("Cannot dispatch compute pipeline.");
+            .dispatch([1024 / 8, 1024 / 8, 1])
+            .expect("Cannot dispatch compute pipeline.")
+            .copy_image_to_buffer(image, out_buf)
+            .expect("Cannot copy image to output buffer.");
         cb_builder.build().expect("Cannot create command buffer.")
     };
 
