@@ -3,6 +3,6 @@
 pub mod cs {
     vulkano_shaders::shader! {
         ty: "compute",
-        path: "shaders/compute.comp"
+        path: "shaders/raytracer.comp"
     }
 }

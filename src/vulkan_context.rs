@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use vulkano::device::physical::{PhysicalDevice, QueueFamily};
-use vulkano::device::{Device, DeviceExtensions, Features, QueuesIter};
+use vulkano::device::{Device, DeviceExtensions, Features, Queue};
 use vulkano::instance::Instance;
 
 pub struct VulkanContext<'a> {
     pub physical_device: PhysicalDevice<'a>,
     pub queue_family: QueueFamily<'a>,
     pub device: Arc<Device>,
-    pub queues: QueuesIter,
+    pub queues: Vec<Arc<Queue>>,
 }
 
 impl<'a> VulkanContext<'a> {
@@ -63,7 +63,7 @@ impl<'a> VulkanContext<'a> {
             physical_device,
             queue_family,
             device,
-            queues,
+            queues: queues.collect(),
         }
     }
 }
