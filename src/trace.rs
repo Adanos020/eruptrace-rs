@@ -1,4 +1,4 @@
-use crate::shaders::cs;
+use crate::shaders::shader_raytracer;
 use crate::vulkan_context::VulkanContext;
 
 use std::sync::Arc;
@@ -40,7 +40,8 @@ pub fn render_scene(
         .expect("Cannot create output buffer.")
     };
 
-    let shader = cs::load(Arc::clone(&vk_context.device)).expect("Cannot load shader.");
+    let shader =
+        shader_raytracer::load(Arc::clone(&vk_context.device)).expect("Cannot load shader.");
     let pipeline = ComputePipeline::new(
         Arc::clone(&vk_context.device),
         shader
