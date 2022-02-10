@@ -1,13 +1,6 @@
 #![allow(clippy::needless_question_mark)]
 
-pub mod shader_raytracer {
-    vulkano_shaders::shader! {
-        ty: "compute",
-        path: "shaders/raytracer.comp"
-    }
-}
-
-pub mod shaders_image {
+pub mod rt_shaders {
     vulkano_shaders::shader! {
         shaders: {
             vertex: {
