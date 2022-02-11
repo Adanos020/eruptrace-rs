@@ -7,10 +7,12 @@ pub struct Camera {
     bottom_left: [f32; 4],
     img_size: [f32; 2],
     img_size_inv: [f32; 2],
+    pub samples: u32,
+    pub max_reflections: u32,
 }
 
 impl Camera {
-    pub fn new(position: [f32; 3], img_size: [u32; 2]) -> Self {
+    pub fn new(position: [f32; 3], img_size: [u32; 2], samples: u32, max_reflections: u32) -> Self {
         let img_size = [img_size[0] as f32, img_size[1] as f32];
         let aspect = img_size[0] / img_size[1];
         let viewport_height = 2.0;
@@ -28,6 +30,8 @@ impl Camera {
             ],
             img_size,
             img_size_inv: [1.0 / img_size[0], 1.0 / img_size[1]],
+            samples,
+            max_reflections,
         }
     }
 

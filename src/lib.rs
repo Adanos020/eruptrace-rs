@@ -1,11 +1,13 @@
 use crate::{
     camera::Camera,
+    primitives::Sphere,
     render_surface::{RenderSurface, Vertex},
+    scene::Scene,
     shaders::rt_shaders,
 };
 use std::sync::Arc;
 use vulkano::{
-    buffer::{BufferUsage, CpuAccessibleBuffer, TypedBufferAccess},
+    buffer::{BufferUsage, CpuAccessibleBuffer, ImmutableBuffer, TypedBufferAccess},
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SubpassContents},
     descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
     device::{physical::PhysicalDevice, Device, DeviceExtensions, Features, Queue},
@@ -32,7 +34,9 @@ use winit::{
 };
 
 mod camera;
+mod primitives;
 mod render_surface;
+mod scene;
 mod shaders;
 
 pub fn run_app() {
@@ -68,7 +72,7 @@ pub fn run_app() {
     let mut prev_frame_end = Some(vulkano::sync::now(Arc::clone(&device)).boxed());
 
     let camera_buf = {
-        let camera = Camera::new([0.0, 0.0, 0.0], surface.window().inner_size().into());
+        let camera = Camera::new([0.0, 0.0, 0.0], surface.window().inner_size().into(), 4, 10);
         CpuAccessibleBuffer::from_data(
             Arc::clone(&device),
             BufferUsage::uniform_buffer(),
@@ -77,6 +81,36 @@ pub fn run_app() {
         )
         .expect("Cannot create uniform buffer for camera.")
     };
+
+    let shapes_buf = {
+        let scene = Scene {
+            spheres: vec![
+                Sphere {
+                    color: [1.0, 0.0, 0.0, 1.0],
+                    position: [0.0, -0.4, -1.0],
+                    radius: 0.4,
+                },
+                Sphere {
+                    color: [1.0, 0.0, 0.0, 1.0],
+                    position: [0.0, 0.4, -1.0],
+                    radius: 0.4,
+                },
+            ],
+        };
+        let shape_data = scene.get_shape_data();
+        let (shapes_buf, shapes_fut) = ImmutableBuffer::from_iter(
+            shape_data.into_iter(),
+            BufferUsage::storage_buffer(),
+            Arc::clone(&queues[0]),
+        )
+        .expect("Cannot create buffer for shapes in scene.");
+        let _ = vulkano::sync::now(Arc::clone(&device))
+            .join(shapes_fut)
+            .then_signal_fence_and_flush()
+            .expect("Cannot upload shapes data buffer.");
+        shapes_buf
+    };
+
     let uniform_descriptor_set = {
         let layout = graphics_pipeline
             .layout()
@@ -85,7 +119,10 @@ pub fn run_app() {
             .expect("Cannot get the layout of descriptor set 0.");
         PersistentDescriptorSet::new(
             Arc::clone(layout),
-            [WriteDescriptorSet::buffer(0, camera_buf.clone())],
+            [
+                WriteDescriptorSet::buffer(0, camera_buf.clone()),
+                WriteDescriptorSet::buffer(1, shapes_buf.clone()),
+            ],
         )
         .expect("Cannot create descriptor set.")
     };
