@@ -36,13 +36,13 @@ impl RenderSurface {
         let indices = [0, 1, 2, 2, 3, 0];
 
         let (vertex_buffer, vb_future) =
-            ImmutableBuffer::from_iter(vertices, BufferUsage::vertex_buffer(), Arc::clone(&queue))
+            ImmutableBuffer::from_iter(vertices, BufferUsage::vertex_buffer(), Arc::clone(queue))
                 .expect("Cannot create vertex buffer.");
         let (index_buffer, ib_future) =
-            ImmutableBuffer::from_iter(indices, BufferUsage::index_buffer(), Arc::clone(&queue))
+            ImmutableBuffer::from_iter(indices, BufferUsage::index_buffer(), Arc::clone(queue))
                 .expect("Cannot create index buffer.");
 
-        let _ = vulkano::sync::now(Arc::clone(&device))
+        let _ = vulkano::sync::now(Arc::clone(device))
             .join(vb_future)
             .join(ib_future)
             .then_signal_fence_and_flush()

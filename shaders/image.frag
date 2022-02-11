@@ -2,6 +2,19 @@
 
 layout(location = 0) out vec4 fragColour;
 
+struct Camera {
+    vec4 position;
+    vec4 horizontal;
+    vec4 vertical;
+    vec4 bottomLeft;
+    vec2 imgSize;
+    vec2 imgSizeInv;
+};
+
+layout(set = 0, binding = 0) uniform CameraUniform {
+    Camera camera;
+};
+
 struct Sphere {
     vec3 position;
     float radius;
@@ -43,27 +56,14 @@ vec4 trace(in Ray ray) {
 }
 
 void main() {
-    // TODO - Move these to push constants or uniforms.
-    vec2 imgSize = vec2(1024, 1024);
-    vec2 invImgSize = 1.f / imgSize;
-    float aspectRatio = imgSize.x / imgSize.y;
-
-    const float viewportHeight = 2.f;
-    float viewportWidth = aspectRatio * viewportHeight;
-    float focalLength = 1.f;
-
-    vec3 camPos = vec3(0.f);
-    vec3 horizontal = vec3(viewportWidth, 0.f, 0.f);
-    vec3 vertical = vec3(0.f, viewportHeight, 0.f);
-    vec3 lowerLeftCorner = camPos - (horizontal * 0.5f) - (vertical * 0.5f) - vec3(0.f, 0.f, focalLength);
-
-    float u = gl_FragCoord.x * invImgSize.x;
-    float v = (imgSize.y - gl_FragCoord.y) * invImgSize.y;
+    float u = gl_FragCoord.x * camera.imgSizeInv.x;
+    float v = (camera.imgSize.y - gl_FragCoord.y) * camera.imgSizeInv.y;
+    vec3 samplePosition = (camera.bottomLeft + (u * camera.horizontal) + (v * camera.vertical)).xyz;
 
     // Ray tracer
     Ray ray;
     ray.position = vec3(0.f);
-    ray.direction = lowerLeftCorner + (u * horizontal) + (v * vertical) - camPos;
+    ray.direction = samplePosition - camera.position.xyz;
 
     vec4 out_colour = trace(ray);
     fragColour = out_colour;

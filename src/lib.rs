@@ -1,13 +1,13 @@
 use crate::{
+    camera::Camera,
     render_surface::{RenderSurface, Vertex},
     shaders::rt_shaders,
 };
 use std::sync::Arc;
 use vulkano::{
-    buffer::TypedBufferAccess,
-    command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, SubpassContents,
-    },
+    buffer::{BufferUsage, CpuAccessibleBuffer, TypedBufferAccess},
+    command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SubpassContents},
+    descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
     device::{physical::PhysicalDevice, Device, DeviceExtensions, Features, Queue},
     image::{view::ImageView, ImageAccess, ImageUsage, SwapchainImage},
     instance::Instance,
@@ -17,7 +17,7 @@ use vulkano::{
             vertex_input::BuffersDefinition,
             viewport::{Viewport, ViewportState},
         },
-        GraphicsPipeline,
+        GraphicsPipeline, Pipeline, PipelineBindPoint,
     },
     render_pass::{Framebuffer, RenderPass, Subpass},
     swapchain::{AcquireError, Surface, Swapchain, SwapchainCreationError},
@@ -31,8 +31,9 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-pub mod render_surface;
-pub mod shaders;
+mod camera;
+mod render_surface;
+mod shaders;
 
 pub fn run_app() {
     let instance = {
@@ -66,6 +67,29 @@ pub fn run_app() {
     let mut recreate_swapchain = false;
     let mut prev_frame_end = Some(vulkano::sync::now(Arc::clone(&device)).boxed());
 
+    let camera_buf = {
+        let camera = Camera::new([0.0, 0.0, 0.0], surface.window().inner_size().into());
+        CpuAccessibleBuffer::from_data(
+            Arc::clone(&device),
+            BufferUsage::uniform_buffer(),
+            false,
+            camera,
+        )
+        .expect("Cannot create uniform buffer for camera.")
+    };
+    let uniform_descriptor_set = {
+        let layout = graphics_pipeline
+            .layout()
+            .descriptor_set_layouts()
+            .get(0)
+            .expect("Cannot get the layout of descriptor set 0.");
+        PersistentDescriptorSet::new(
+            Arc::clone(layout),
+            [WriteDescriptorSet::buffer(0, camera_buf.clone())],
+        )
+        .expect("Cannot create descriptor set.")
+    };
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
         match event {
@@ -97,6 +121,10 @@ pub fn run_app() {
                                 &mut viewport,
                             );
                             recreate_swapchain = false;
+
+                            let mut camera_lock =
+                                camera_buf.write().expect("Cannot read camera buffer.");
+                            camera_lock.set_img_size(dimensions);
                         }
                     };
                 }
@@ -111,14 +139,37 @@ pub fn run_app() {
                             recreate_swapchain = true;
                         }
 
-                        let cb = create_command_buffer(
-                            &device,
-                            &queues,
-                            &framebuffers[image_num],
-                            &viewport,
-                            &graphics_pipeline,
-                            &render_surface,
-                        );
+                        let cb = {
+                            let clear_values = vec![[0.0, 0.0, 0.0, 1.0].into()];
+                            let mut cb_builder = AutoCommandBufferBuilder::primary(
+                                Arc::clone(&device),
+                                queues[0].family(),
+                                CommandBufferUsage::OneTimeSubmit,
+                            )
+                            .expect("Cannot start building command buffer.");
+                            cb_builder
+                                .begin_render_pass(
+                                    Arc::clone(&framebuffers[image_num]),
+                                    SubpassContents::Inline,
+                                    clear_values,
+                                )
+                                .expect("Cannot begin render pass.")
+                                .set_viewport(0, [viewport.clone()])
+                                .bind_pipeline_graphics(Arc::clone(&graphics_pipeline))
+                                .bind_descriptor_sets(
+                                    PipelineBindPoint::Graphics,
+                                    Arc::clone(graphics_pipeline.layout()),
+                                    0,
+                                    Arc::clone(&uniform_descriptor_set),
+                                )
+                                .bind_vertex_buffers(0, Arc::clone(&render_surface.vertex_buffer))
+                                .bind_index_buffer(Arc::clone(&render_surface.index_buffer))
+                                .draw_indexed(render_surface.index_buffer.len() as u32, 1, 0, 0, 0)
+                                .expect("Cannot execute draw command.")
+                                .end_render_pass()
+                                .expect("Cannot end render pass.");
+                            cb_builder.build().expect("Cannot build command buffer.")
+                        };
 
                         let f = prev_frame_end
                             .take()
@@ -132,21 +183,17 @@ pub fn run_app() {
                                 image_num,
                             )
                             .then_signal_fence_and_flush();
-                        match f {
-                            Ok(future) => {
-                                prev_frame_end.replace(future.boxed());
-                            }
-                            Err(FlushError::OutOfDate) => {
-                                recreate_swapchain = true;
-                                prev_frame_end
-                                    .replace(vulkano::sync::now(Arc::clone(&device)).boxed());
-                            }
+                        prev_frame_end.replace(match f {
+                            Ok(future) => future.boxed(),
                             Err(e) => {
-                                eprintln!("Failed to flush: {e:?}");
-                                prev_frame_end
-                                    .replace(vulkano::sync::now(Arc::clone(&device)).boxed());
+                                if e == FlushError::OutOfDate {
+                                    recreate_swapchain = true;
+                                } else {
+                                    eprintln!("Failed to flush: {e:?}");
+                                }
+                                vulkano::sync::now(Arc::clone(&device)).boxed()
                             }
-                        }
+                        });
                     }
                 }
             }
@@ -302,37 +349,4 @@ fn update_viewport_and_create_framebuffers(
                 .expect("Cannot create framebuffer.")
         })
         .collect()
-}
-
-fn create_command_buffer(
-    device: &Arc<Device>,
-    queues: &[Arc<Queue>],
-    framebuffer: &Arc<Framebuffer>,
-    viewport: &Viewport,
-    graphics_pipeline: &Arc<GraphicsPipeline>,
-    render_surface: &RenderSurface,
-) -> PrimaryAutoCommandBuffer {
-    let clear_values = vec![[0.0, 0.0, 0.0, 1.0].into()];
-    let mut cb_builder = AutoCommandBufferBuilder::primary(
-        Arc::clone(device),
-        queues[0].family(),
-        CommandBufferUsage::OneTimeSubmit,
-    )
-    .expect("Cannot start building command buffer.");
-    cb_builder
-        .begin_render_pass(
-            Arc::clone(framebuffer),
-            SubpassContents::Inline,
-            clear_values,
-        )
-        .expect("Cannot begin render pass.")
-        .set_viewport(0, [viewport.clone()])
-        .bind_pipeline_graphics(Arc::clone(graphics_pipeline))
-        .bind_vertex_buffers(0, Arc::clone(&render_surface.vertex_buffer))
-        .bind_index_buffer(Arc::clone(&render_surface.index_buffer))
-        .draw_indexed(render_surface.index_buffer.len() as u32, 1, 0, 0, 0)
-        .expect("Cannot execute draw command.")
-        .end_render_pass()
-        .expect("Cannot end render pass.");
-    cb_builder.build().expect("Cannot build command buffer.")
 }
