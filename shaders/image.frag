@@ -1,14 +1,19 @@
 #version 450
 
+// Math constants ------------------------------------------------------------------------------------------------------
+
 const float FLOAT_MAX = 3.402823466e+38f;
 const float FLOAT_MIN = 1.175494351e-38f;
 const float PI = 3.1415926535897932384626433832795f;
 const float TWO_PI = 2.f * PI;
 
-// Material types
+// Material types ------------------------------------------------------------------------------------------------------
+
 const uint MATERIAL_REFLECTIVE = 0;
 const uint MATERIAL_REFRACTIVE = 1;
 const uint MATERIAL_EMISSIVE = 2;
+
+// Structs -------------------------------------------------------------------------------------------------------------
 
 struct Camera {
     vec4 position;
@@ -52,6 +57,8 @@ struct Scattering {
     vec4 color;
 };
 
+// I/O -----------------------------------------------------------------------------------------------------------------
+
 layout(location = 0) out vec4 fragColour;
 
 layout(set = 0, binding = 0) uniform CameraUniform {
@@ -64,38 +71,7 @@ layout(set = 0, binding = 2) buffer MaterialData {
     float materialValues[];
 };
 
-float rand(float at);
-vec3 randPointInUnitCube(float at);
-vec3 randPointInUnitSphere(float at);
-vec3 randPointOnUnitSphere(float at);
-
-vec3 pointOnRay(in Ray ray, float t);
-
-Sphere sphereAt(inout uint iShapeValue);
-
-ReflectiveMaterial reflectiveAt(inout uint iMaterialValue);
-
-vec4 trace(Ray ray);
-
-bool hitShape(in Ray ray, out Hit hit);
-bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out Hit hit);
-
-bool scatter(in Hit hit, out Scattering scattering);
-bool scatterReflective(in Hit hit, in ReflectiveMaterial mat, out Scattering scattering);
-
-void main() {
-    Ray ray;
-    ray.position = camera.position.xyz;
-    vec4 color = vec4(0.f);
-    for (int i = 0; i < camera.samples; ++i) {
-        float u = (gl_FragCoord.x + rand(i)) * camera.imgSizeInv.x;
-        float v = (camera.imgSize.y - gl_FragCoord.y + rand(i + 0.5f)) * camera.imgSizeInv.y;
-        vec3 samplePosition = (camera.bottomLeft + (u * camera.horizontal) + (v * camera.vertical)).xyz;
-        ray.direction = samplePosition - camera.position.xyz;
-        color += trace(ray);
-    }
-    fragColour = sqrt(color / float(camera.samples));
-}
+// Utils ---------------------------------------------------------------------------------------------------------------
 
 float rand(float at) {
     return fract(sin(dot((at + gl_FragCoord.xy), vec2(12.9898f, 78.233f))) * 43758.5453123f);
@@ -142,6 +118,30 @@ ReflectiveMaterial reflectiveAt(inout uint iMaterialValue) {
         // Fuzz
         materialValues[iMaterialValue++]
     );
+}
+
+// Ray tracing ---------------------------------------------------------------------------------------------------------
+
+vec4 trace(Ray ray);
+
+bool hitShape(in Ray ray, out Hit hit);
+bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out Hit hit);
+
+bool scatter(in Hit hit, out Scattering scattering);
+bool scatterReflective(in Hit hit, in ReflectiveMaterial mat, out Scattering scattering);
+
+void main() {
+    Ray ray;
+    ray.position = camera.position.xyz;
+    vec4 color = vec4(0.f);
+    for (int i = 0; i < camera.samples; ++i) {
+        float u = (gl_FragCoord.x + rand(i)) * camera.imgSizeInv.x;
+        float v = (camera.imgSize.y - gl_FragCoord.y + rand(i + 0.5f)) * camera.imgSizeInv.y;
+        vec3 samplePosition = (camera.bottomLeft + (u * camera.horizontal) + (v * camera.vertical)).xyz;
+        ray.direction = samplePosition - camera.position.xyz;
+        color += trace(ray);
+    }
+    fragColour = sqrt(color / float(camera.samples));
 }
 
 vec4 trace(Ray ray) {
