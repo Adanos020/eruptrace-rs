@@ -32,8 +32,10 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
+use crate::materials::ReflectiveMaterial;
 
 mod camera;
+mod materials;
 mod primitives;
 mod render_surface;
 mod scene;
@@ -72,7 +74,7 @@ pub fn run_app() {
     let mut prev_frame_end = Some(vulkano::sync::now(Arc::clone(&device)).boxed());
 
     let camera_buf = {
-        let camera = Camera::new([0.0, 0.0, 0.0], surface.window().inner_size().into(), 4, 10);
+        let camera = Camera::new([0.0, 0.0, 0.0], surface.window().inner_size().into(), 50, 5);
         CpuAccessibleBuffer::from_data(
             Arc::clone(&device),
             BufferUsage::uniform_buffer(),
@@ -82,33 +84,51 @@ pub fn run_app() {
         .expect("Cannot create uniform buffer for camera.")
     };
 
-    let shapes_buf = {
+    let (shapes_buf, materials_buf) = {
         let scene = Scene {
             spheres: vec![
                 Sphere {
-                    color: [1.0, 0.0, 0.0, 1.0],
-                    position: [0.0, -0.4, -1.0],
-                    radius: 0.4,
+                    position: [0.0, -100.5, -1.0],
+                    radius: 100.0,
+                    material_type: 0,
+                    material_index: 0,
                 },
                 Sphere {
-                    color: [1.0, 0.0, 0.0, 1.0],
-                    position: [0.0, 0.4, -1.0],
-                    radius: 0.4,
+                    position: [0.0, 0.0, -1.0],
+                    radius: 0.5,
+                    material_type: 0,
+                    material_index: 1,
                 },
             ],
+            reflective_materials: vec![
+                ReflectiveMaterial {
+                    color: [0.2, 1.0, 0.6, 1.0],
+                    fuzz: 1.0,
+                },
+                ReflectiveMaterial {
+                    color: [1.0, 0.0, 0.0, 1.0],
+                    fuzz: 1.0,
+                },
+            ]
         };
-        let shape_data = scene.get_shape_data();
         let (shapes_buf, shapes_fut) = ImmutableBuffer::from_iter(
-            shape_data.into_iter(),
+            scene.get_shape_data().into_iter(),
             BufferUsage::storage_buffer(),
             Arc::clone(&queues[0]),
         )
         .expect("Cannot create buffer for shapes in scene.");
+        let (materials_buf, materials_fut) = ImmutableBuffer::from_iter(
+            scene.get_material_data().into_iter(),
+            BufferUsage::storage_buffer(),
+            Arc::clone(&queues[0]),
+        )
+        .expect("Cannot create buffer for materials in scene.");
         let _ = vulkano::sync::now(Arc::clone(&device))
             .join(shapes_fut)
+            .join(materials_fut)
             .then_signal_fence_and_flush()
             .expect("Cannot upload shapes data buffer.");
-        shapes_buf
+        (shapes_buf, materials_buf)
     };
 
     let uniform_descriptor_set = {
@@ -122,6 +142,7 @@ pub fn run_app() {
             [
                 WriteDescriptorSet::buffer(0, camera_buf.clone()),
                 WriteDescriptorSet::buffer(1, shapes_buf.clone()),
+                WriteDescriptorSet::buffer(2, materials_buf.clone()),
             ],
         )
         .expect("Cannot create descriptor set.")
@@ -159,9 +180,10 @@ pub fn run_app() {
                             );
                             recreate_swapchain = false;
 
-                            let mut camera_lock =
-                                camera_buf.write().expect("Cannot read camera buffer.");
-                            camera_lock.set_img_size(dimensions);
+                            match camera_buf.write() {
+                                Ok(mut camera_lock) => camera_lock.set_img_size(dimensions),
+                                Err(_) => eprintln!("Cannot get a write lock on camera buffer."),
+                            }
                         }
                     };
                 }
