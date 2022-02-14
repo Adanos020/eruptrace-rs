@@ -85,7 +85,7 @@ vec3 randPointInUnitCube(float at) {
     );
 }
 
-vec3 randPointOnUnitSphere(float at) {
+vec3 randDirection(float at) {
     return normalize(randPointInUnitCube(at));
 }
 
@@ -146,15 +146,21 @@ void main() {
 
 vec4 trace(Ray ray) {
     vec4 finalColor = vec4(1.f);
-    for (int i = 0; i < camera.maxReflections; ++i) {
+    for (int iReflection = 0; iReflection < camera.maxReflections; ++iReflection) {
         Hit hit;
         if (hitShape(ray, hit)) {
             Scattering scattering;
             if (scatter(hit, scattering)) {
+                // Scattering
+                finalColor *= scattering.color;
                 ray = scattering.newRay;
-                finalColor *= 0.5f * scattering.color;
+            } else {
+                // Emission
+                finalColor += scattering.color;
+                break;
             }
         } else {
+            // Sky
             float factor = 0.5f * (normalize(ray.direction).y + 1.f);
             finalColor *= vec4(mix(vec3(1.f), vec3(0.5f, 0.7f, 1.f), factor), 1.f);
             break;
@@ -166,14 +172,13 @@ vec4 trace(Ray ray) {
 bool hitShape(in Ray ray, out Hit hit) {
     bool hitOccured = false;
     uint iShapeValue = 0;
-
-    float minDistance = 0.0001f;
+    const float minDistance = 1e-4f;
     float maxDistance = FLOAT_MAX;
 
-    float nSpheres = shapeValues[iShapeValue++];
-    for (float iSphere = 0.f; iSphere < nSpheres; ++iSphere) {
-        Sphere sphere = sphereAt(iShapeValue);
+    int nSpheres = int(shapeValues[iShapeValue++]);
+    for (int iSphere = 0; iSphere < nSpheres; ++iSphere) {
         Hit tempHit;
+        Sphere sphere = sphereAt(iShapeValue);
         if (hitSphere(ray, sphere, minDistance, maxDistance, tempHit)) {
             hitOccured = true;
             maxDistance = tempHit.distance;
@@ -189,11 +194,13 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
     float a = dot(ray.direction, ray.direction);
     float b = dot(rs, ray.direction);
     float c = dot(rs, rs) - (sphere.radius * sphere.radius);
-    float discriminant = (b * b) - (a * c);
 
-    if (discriminant > 0.f) {
-        float aInv = 1.f / a;
+    float discriminant = (b * b) - (a * c);
+    if (discriminant < 0.f) {
+        return false;
+    } else {
         float sqrtDis = sqrt(discriminant);
+        float aInv = 1.f / a;
 
         float root = (-b - sqrtDis) * aInv;
         if (root < distMin || root > distMax) {
@@ -205,14 +212,13 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
 
         hit.distance = root;
         hit.position = pointOnRay(ray, root);
-        hit.incidental = ray.direction;
         hit.normal = (hit.position - sphere.position) / sphere.radius;
-        hit.normal *= sign(dot(ray.direction, hit.normal));
+        hit.normal *= -sign(dot(ray.direction, hit.normal));
+        hit.incidental = ray.direction;
         hit.materialType = sphere.materialType;
         hit.materialIndex = sphere.materialIndex;
         return true;
     }
-    return false;
 }
 
 bool scatter(in Hit hit, out Scattering scattering) {
@@ -236,15 +242,19 @@ bool scatter(in Hit hit, out Scattering scattering) {
 
 bool scatterReflective(in Hit hit, in ReflectiveMaterial mat, out Scattering scattering) {
 //    vec3 reflected = reflect(hit.incidental, hit.normal);
-//    vec3 newDir = reflected + (mat.fuzz * randPointOnUnitSphere(dot(hit.incidental.xy, hit.incidental.zx)));
+//    vec3 newDir = reflected + (mat.fuzz * randDirection(dot(hit.incidental.xy, hit.incidental.zx)));
 //    if (dot(newDir, hit.normal) > 0.f) {
 //        scattering.color = mat.color;
 //        scattering.newRay = Ray(hit.position, newDir);
 //        return true;
 //    }
 //    return false;
-    vec3 target = hit.position + hit.normal + randPointOnUnitSphere(dot(hit.position, hit.position));
-    scattering.newRay = Ray(hit.position, target - hit.position);
+    vec3 scatterDirection = hit.normal;
+    vec3 randDir = randDirection(dot(hit.position, hit.position));
+    if (randDir != -scatterDirection) {
+        scatterDirection += randDir;
+    }
+    scattering.newRay = Ray(hit.position, scatterDirection);
     scattering.color = mat.color;
     return true;
 }

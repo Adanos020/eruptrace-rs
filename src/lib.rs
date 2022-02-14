@@ -74,7 +74,7 @@ pub fn run_app() {
     let mut prev_frame_end = Some(vulkano::sync::now(Arc::clone(&device)).boxed());
 
     let camera_buf = {
-        let camera = Camera::new([0.0, 0.0, 0.0], surface.window().inner_size().into(), 50, 5);
+        let camera = Camera::new([0.0, 0.0, 0.0], surface.window().inner_size().into(), 50, 20);
         CpuAccessibleBuffer::from_data(
             Arc::clone(&device),
             BufferUsage::uniform_buffer(),
