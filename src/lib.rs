@@ -32,7 +32,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
-use crate::materials::ReflectiveMaterial;
+use crate::materials::{Material, MaterialType};
 
 mod camera;
 mod materials;
@@ -74,7 +74,7 @@ pub fn run_app() {
     let mut prev_frame_end = Some(vulkano::sync::now(Arc::clone(&device)).boxed());
 
     let camera_buf = {
-        let camera = Camera::new([0.0, 0.0, 0.0], surface.window().inner_size().into(), 50, 20);
+        let camera = Camera::new([0.0, 0.0, 0.0], surface.window().inner_size().into(), 30, 20);
         CpuAccessibleBuffer::from_data(
             Arc::clone(&device),
             BufferUsage::uniform_buffer(),
@@ -90,24 +90,24 @@ pub fn run_app() {
                 Sphere {
                     position: [0.0, -100.5, -1.0],
                     radius: 100.0,
-                    material_type: 0,
+                    material_type: MaterialType::Diffusive,
                     material_index: 0,
                 },
                 Sphere {
                     position: [0.0, 0.0, -1.0],
                     radius: 0.5,
-                    material_type: 0,
+                    material_type: MaterialType::Diffusive,
                     material_index: 1,
                 },
             ],
-            reflective_materials: vec![
-                ReflectiveMaterial {
+            materials: vec![
+                Material {
                     color: [0.2, 1.0, 0.6, 1.0],
-                    fuzz: 1.0,
+                    parameter: 0.0,
                 },
-                ReflectiveMaterial {
+                Material {
                     color: [1.0, 0.0, 0.0, 1.0],
-                    fuzz: 1.0,
+                    parameter: 0.0,
                 },
             ]
         };

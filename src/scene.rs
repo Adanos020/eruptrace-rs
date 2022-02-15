@@ -3,7 +3,7 @@ use crate::{materials::*, primitives::*};
 
 pub struct Scene {
     pub spheres: Vec<Sphere>,
-    pub reflective_materials: Vec<ReflectiveMaterial>,
+    pub materials: Vec<Material>,
 }
 
 impl Scene {
@@ -19,7 +19,7 @@ impl Scene {
             data.push(sphere.position[1]);
             data.push(sphere.position[2]);
             data.push(sphere.radius);
-            data.push(sphere.material_type as f32);
+            data.push(sphere.material_type as u32 as f32);
             data.push(sphere.material_index as f32);
         }
 
@@ -27,17 +27,14 @@ impl Scene {
     }
 
     pub fn get_material_data(&self) -> Vec<f32> {
-        let mut data = Vec::with_capacity({
-            let reflective_materials = self.reflective_materials.len() * size_of::<ReflectiveMaterial>();
-            reflective_materials
-        });
+        let mut data = Vec::with_capacity(self.materials.len() * size_of::<Material>());
 
-        for reflective in self.reflective_materials.iter() {
-            data.push(reflective.color[0]);
-            data.push(reflective.color[1]);
-            data.push(reflective.color[2]);
-            data.push(reflective.color[3]);
-            data.push(reflective.fuzz);
+        for material in self.materials.iter() {
+            data.push(material.color[0]);
+            data.push(material.color[1]);
+            data.push(material.color[2]);
+            data.push(material.color[3]);
+            data.push(material.parameter);
         }
 
         data

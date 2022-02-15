@@ -9,9 +9,10 @@ const float TWO_PI = 2.f * PI;
 
 // Material types ------------------------------------------------------------------------------------------------------
 
-const uint MATERIAL_REFLECTIVE = 0;
-const uint MATERIAL_REFRACTIVE = 1;
-const uint MATERIAL_EMISSIVE = 2;
+const uint MATERIAL_DIFFUSIVE = 0;
+const uint MATERIAL_REFLECTIVE = 1;
+const uint MATERIAL_REFRACTIVE = 2;
+const uint MATERIAL_EMITTING = 3;
 
 // Structs -------------------------------------------------------------------------------------------------------------
 
@@ -33,9 +34,9 @@ struct Sphere {
     uint materialIndex;
 };
 
-struct ReflectiveMaterial {
+struct Material {
     vec4 color;
-    float fuzz;
+    float parameter;
 };
 
 struct Ray {
@@ -85,8 +86,17 @@ vec3 randPointInUnitCube(float at) {
     );
 }
 
+// Taken from: https://github.com/LWJGL/lwjgl3-demos/blob/main/res/org/lwjgl/demo/opengl/raytracing/randomCommon.glsl
 vec3 randDirection(float at) {
-    return normalize(randPointInUnitCube(at));
+    vec3 randPoint = randPointInUnitCube(at);
+    float ang1 = (randPoint.x + 1.0) * PI;
+    float u = randPoint.y;
+    float u2 = u * u;
+    float sqrt1MinusU2 = sqrt(1.0 - u2);
+    float x = sqrt1MinusU2 * cos(ang1);
+    float y = sqrt1MinusU2 * sin(ang1);
+    float z = u;
+    return vec3(x, y, z);
 }
 
 vec3 pointOnRay(in Ray ray, float distance) {
@@ -108,14 +118,14 @@ Sphere sphereAt(inout uint iShapeValue) {
     );
 }
 
-ReflectiveMaterial reflectiveAt(inout uint iMaterialValue) {
-    return ReflectiveMaterial(
+Material materialAt(inout uint iMaterialValue) {
+    return Material(
         // Colour
         vec4(materialValues[iMaterialValue++],
              materialValues[iMaterialValue++],
              materialValues[iMaterialValue++],
              materialValues[iMaterialValue++]),
-        // Fuzz
+        // Parameter
         materialValues[iMaterialValue++]
     );
 }
@@ -128,7 +138,10 @@ bool hitShape(in Ray ray, out Hit hit);
 bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out Hit hit);
 
 bool scatter(in Hit hit, out Scattering scattering);
-bool scatterReflective(in Hit hit, in ReflectiveMaterial mat, out Scattering scattering);
+bool scatterDiffusive(in Hit hit, in Material mat, out Scattering scattering);
+bool scatterReflective(in Hit hit, in Material mat, out Scattering scattering);
+bool scatterRefractive(in Hit hit, in Material mat, out Scattering scattering);
+bool scatterEmitting(in Hit hit, in Material mat, out Scattering scattering);
 
 void main() {
     Ray ray;
@@ -222,17 +235,20 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
 }
 
 bool scatter(in Hit hit, out Scattering scattering) {
+    uint iMaterialValue = 5 * hit.materialIndex;
+    Material material = materialAt(iMaterialValue);
     switch (hit.materialType) {
+        case MATERIAL_DIFFUSIVE: {
+            return scatterDiffusive(hit, material, scattering);
+        }
         case MATERIAL_REFLECTIVE: {
-            uint iMaterialValue = 5 * hit.materialIndex;
-            ReflectiveMaterial reflectiveMat = reflectiveAt(iMaterialValue);
-            return scatterReflective(hit, reflectiveMat, scattering);
+            return scatterReflective(hit, material, scattering);
         }
         case MATERIAL_REFRACTIVE: {
-            return false;
+            return scatterRefractive(hit, material, scattering);
         }
-        case MATERIAL_EMISSIVE: {
-            return false;
+        case MATERIAL_EMITTING: {
+            return scatterEmitting(hit, material, scattering);
         }
         default: {
             return false;
@@ -240,21 +256,33 @@ bool scatter(in Hit hit, out Scattering scattering) {
     }
 }
 
-bool scatterReflective(in Hit hit, in ReflectiveMaterial mat, out Scattering scattering) {
-//    vec3 reflected = reflect(hit.incidental, hit.normal);
-//    vec3 newDir = reflected + (mat.fuzz * randDirection(dot(hit.incidental.xy, hit.incidental.zx)));
-//    if (dot(newDir, hit.normal) > 0.f) {
-//        scattering.color = mat.color;
-//        scattering.newRay = Ray(hit.position, newDir);
-//        return true;
-//    }
-//    return false;
-    vec3 scatterDirection = hit.normal;
-    vec3 randDir = randDirection(dot(hit.position, hit.position));
-    if (randDir != -scatterDirection) {
-        scatterDirection += randDir;
-    }
-    scattering.newRay = Ray(hit.position, scatterDirection);
-    scattering.color = mat.color;
+bool scatterDiffusive(in Hit hit, in Material material, out Scattering scattering) {
+    vec3 scatterDirection = randDirection(dot(hit.position, hit.position));
+    scatterDirection *= sign(dot(scatterDirection, hit.normal));
+    scattering.newRay = Ray(hit.position, normalize(scatterDirection));
+    scattering.color = material.color;
     return true;
+}
+
+bool scatterReflective(in Hit hit, in Material material, out Scattering scattering) {
+    float fuzz = material.parameter;
+    vec3 reflected = reflect(hit.incidental, hit.normal);
+    vec3 newDir = reflected + (fuzz * randDirection(dot(hit.position, hit.position)));
+    if (dot(newDir, hit.normal) > 0.f) {
+        scattering.color = material.color;
+        scattering.newRay = Ray(hit.position, newDir);
+        return true;
+    }
+    return false;
+}
+
+bool scatterRefractive(in Hit hit, in Material material, out Scattering scattering) {
+    float refractiveIndex = material.parameter;
+    return false;
+}
+
+bool scatterEmitting(in Hit hit, in Material material, out Scattering scattering) {
+    float intensity = material.parameter;
+    scattering.color = intensity * material.color;
+    return false;
 }
