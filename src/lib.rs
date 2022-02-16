@@ -99,6 +99,18 @@ pub fn run_app() {
                     material_type: MaterialType::Diffusive,
                     material_index: 1,
                 },
+                Sphere {
+                    position: [-1.0, 0.0, -1.0],
+                    radius: 0.5,
+                    material_type: MaterialType::Reflective,
+                    material_index: 2,
+                },
+                Sphere {
+                    position: [1.0, 0.0, -1.0],
+                    radius: 0.5,
+                    material_type: MaterialType::Reflective,
+                    material_index: 3,
+                },
             ],
             materials: vec![
                 Material {
@@ -108,6 +120,14 @@ pub fn run_app() {
                 Material {
                     color: [1.0, 0.0, 0.0, 1.0],
                     parameter: 0.0,
+                },
+                Material {
+                    color: [0.8, 0.8, 0.8, 1.0],
+                    parameter: 0.1,
+                },
+                Material {
+                    color: [0.8, 0.4, 0.2, 1.0],
+                    parameter: 1.0,
                 },
             ]
         };

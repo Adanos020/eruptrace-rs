@@ -267,10 +267,12 @@ bool scatterDiffusive(in Hit hit, in Material material, out Scattering scatterin
 bool scatterReflective(in Hit hit, in Material material, out Scattering scattering) {
     float fuzz = material.parameter;
     vec3 reflected = reflect(hit.incidental, hit.normal);
-    vec3 newDir = reflected + (fuzz * randDirection(dot(hit.position, hit.position)));
-    if (dot(newDir, hit.normal) > 0.f) {
+    vec3 randDir = randDirection(dot(hit.position, hit.position));
+    vec3 scatterDirection = reflected + (fuzz * randDir);
+    scatterDirection *= sign(dot(scatterDirection, hit.normal));
+    if (dot(scatterDirection, hit.normal) > 0.f) {
         scattering.color = material.color;
-        scattering.newRay = Ray(hit.position, newDir);
+        scattering.newRay = Ray(hit.position, scatterDirection);
         return true;
     }
     return false;
