@@ -85,52 +85,7 @@ pub fn run_app() {
     };
 
     let (shapes_buf, materials_buf) = {
-        let scene = Scene {
-            spheres: vec![
-                Sphere {
-                    position: [0.0, -100.5, -1.0],
-                    radius: 100.0,
-                    material_type: MaterialType::Diffusive,
-                    material_index: 0,
-                },
-                Sphere {
-                    position: [0.0, 0.0, -1.0],
-                    radius: 0.5,
-                    material_type: MaterialType::Diffusive,
-                    material_index: 1,
-                },
-                Sphere {
-                    position: [-1.0, 0.0, -1.0],
-                    radius: 0.5,
-                    material_type: MaterialType::Reflective,
-                    material_index: 2,
-                },
-                Sphere {
-                    position: [1.0, 0.0, -1.0],
-                    radius: 0.5,
-                    material_type: MaterialType::Reflective,
-                    material_index: 3,
-                },
-            ],
-            materials: vec![
-                Material {
-                    color: [0.2, 1.0, 0.6, 1.0],
-                    parameter: 0.0,
-                },
-                Material {
-                    color: [1.0, 0.0, 0.0, 1.0],
-                    parameter: 0.0,
-                },
-                Material {
-                    color: [0.8, 0.8, 0.8, 1.0],
-                    parameter: 0.1,
-                },
-                Material {
-                    color: [0.8, 0.4, 0.2, 1.0],
-                    parameter: 1.0,
-                },
-            ]
-        };
+        let scene = Scene::test_scene();
         let (shapes_buf, shapes_fut) = ImmutableBuffer::from_iter(
             scene.get_shape_data().into_iter(),
             BufferUsage::storage_buffer(),
@@ -138,7 +93,7 @@ pub fn run_app() {
         )
         .expect("Cannot create buffer for shapes in scene.");
         let (materials_buf, materials_fut) = ImmutableBuffer::from_iter(
-            scene.get_material_data().into_iter(),
+            scene.materials.into_iter(),
             BufferUsage::storage_buffer(),
             Arc::clone(&queues[0]),
         )

@@ -65,11 +65,11 @@ layout(location = 0) out vec4 fragColour;
 layout(set = 0, binding = 0) uniform CameraUniform {
     Camera camera;
 };
-layout(set = 0, binding = 1) buffer ShapesData {
+layout(set = 0, binding = 1) readonly buffer ShapesData {
     float shapeValues[];
 };
-layout(set = 0, binding = 2) buffer MaterialData {
-    float materialValues[];
+layout(set = 0, binding = 2, std140) readonly buffer MaterialData {
+    Material materials[];
 };
 
 // Utils ---------------------------------------------------------------------------------------------------------------
@@ -115,18 +115,6 @@ Sphere sphereAt(inout uint iShapeValue) {
         uint(shapeValues[iShapeValue++]),
         // Material index
         uint(shapeValues[iShapeValue++])
-    );
-}
-
-Material materialAt(inout uint iMaterialValue) {
-    return Material(
-        // Colour
-        vec4(materialValues[iMaterialValue++],
-             materialValues[iMaterialValue++],
-             materialValues[iMaterialValue++],
-             materialValues[iMaterialValue++]),
-        // Parameter
-        materialValues[iMaterialValue++]
     );
 }
 
@@ -235,8 +223,7 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
 }
 
 bool scatter(in Hit hit, out Scattering scattering) {
-    uint iMaterialValue = 5 * hit.materialIndex;
-    Material material = materialAt(iMaterialValue);
+    Material material = materials[hit.materialIndex];
     switch (hit.materialType) {
         case MATERIAL_DIFFUSIVE: {
             return scatterDiffusive(hit, material, scattering);
