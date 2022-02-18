@@ -42,17 +42,23 @@ impl Scene {
                     material_type: MaterialType::Diffusive,
                     material_index: 1,
                 },
+                Sphere { // Middle back sphere
+                    position: [0.0, 2.5, -6.5],
+                    radius: 5.0,
+                    material_type: MaterialType::Diffusive,
+                    material_index: 2,
+                },
                 Sphere { // Left sphere
                     position: [-1.0, 0.0, -1.0],
                     radius: 0.5,
                     material_type: MaterialType::Reflective,
-                    material_index: 2,
+                    material_index: 3,
                 },
                 Sphere { // Right sphere
                     position: [1.0, 0.0, -1.0],
                     radius: 0.5,
                     material_type: MaterialType::Refractive,
-                    material_index: 3,
+                    material_index: 4,
                 },
             ],
             materials: vec![
@@ -64,12 +70,16 @@ impl Scene {
                     color: vec4(1.0, 0.0, 0.0, 1.0),
                     parameter: float(1.0),
                 },
+                Material { // Middle back sphere
+                    color: vec4(0.5, 0.5, 1.0, 1.0),
+                    parameter: float(1.0),
+                },
                 Material { // Left sphere
                     color: vec4(0.8, 0.8, 0.8, 1.0),
                     parameter: float(0.1),
                 },
                 Material { // Right sphere
-                    color: vec4(0.8, 0.4, 0.2, 1.0),
+                    color: vec4(0.8, 0.8, 0.8, 1.0),
                     parameter: float(1.5),
                 },
             ]
