@@ -51,7 +51,7 @@ impl Scene {
                 Sphere { // Right sphere
                     position: [1.0, 0.0, -1.0],
                     radius: 0.5,
-                    material_type: MaterialType::Reflective,
+                    material_type: MaterialType::Refractive,
                     material_index: 3,
                 },
             ],
@@ -70,7 +70,7 @@ impl Scene {
                 },
                 Material { // Right sphere
                     color: vec4(0.8, 0.4, 0.2, 1.0),
-                    parameter: float(1.0),
+                    parameter: float(1.5),
                 },
             ]
         }

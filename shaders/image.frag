@@ -51,6 +51,7 @@ struct Hit {
     float distance;
     uint materialType;
     uint materialIndex;
+    bool bFrontFace;
 };
 
 struct Scattering {
@@ -134,15 +135,15 @@ bool scatterEmitting(in Hit hit, in Material mat, out Scattering scattering);
 void main() {
     Ray ray;
     ray.position = camera.position.xyz;
-    vec4 color = vec4(0.f);
+    vec4 pixelColor = vec4(0.f);
     for (int i = 0; i < camera.samples; ++i) {
         float u = (gl_FragCoord.x + rand(i)) * camera.imgSizeInv.x;
         float v = (camera.imgSize.y - gl_FragCoord.y + rand(i + 0.5f)) * camera.imgSizeInv.y;
         vec3 samplePosition = (camera.bottomLeft + (u * camera.horizontal) + (v * camera.vertical)).xyz;
         ray.direction = samplePosition - camera.position.xyz;
-        color += trace(ray);
+        pixelColor += trace(ray);
     }
-    fragColour = sqrt(color / float(camera.samples));
+    fragColour = sqrt(pixelColor / float(camera.samples));
 }
 
 vec4 trace(Ray ray) {
@@ -211,13 +212,18 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
             }
         }
 
+        vec3 hitPosition = pointOnRay(ray, root);
+        vec3 normal = (hitPosition - sphere.position) / sphere.radius;
+        float dotDirNorm = dot(ray.direction, normal);
+
         hit.distance = root;
-        hit.position = pointOnRay(ray, root);
-        hit.normal = (hit.position - sphere.position) / sphere.radius;
-        hit.normal *= -sign(dot(ray.direction, hit.normal));
+        hit.position = hitPosition;
+        hit.normal = normal;
+        hit.normal *= -sign(dotDirNorm);
         hit.incidental = ray.direction;
         hit.materialType = sphere.materialType;
         hit.materialIndex = sphere.materialIndex;
+        hit.bFrontFace = dotDirNorm < 0.f;
         return true;
     }
 }
@@ -266,8 +272,24 @@ bool scatterReflective(in Hit hit, in Material material, out Scattering scatteri
 }
 
 bool scatterRefractive(in Hit hit, in Material material, out Scattering scattering) {
-    float refractiveIndex = material.parameter;
-    return false;
+    float refractiveIndex = hit.bFrontFace ? (1.f / material.parameter) : material.parameter;
+    vec3 direction = normalize(hit.incidental);
+    float cosTheta = min(dot(-direction, hit.normal), 1.f);
+    float sinTheta = sqrt(1.f - (cosTheta * cosTheta));
+    bool cannotRefract = refractiveIndex * sinTheta > 1.f;
+
+    float r = (1.f - refractiveIndex) / (1.f + refractiveIndex);
+    r *= r;
+    float reflectance = r + (1.f - r) * pow((1.f - cosTheta), 5.f);
+    bool shouldReflect = reflectance > rand(dot(hit.position, hit.incidental));
+
+    vec3 scatterDirection = (cannotRefract || shouldReflect)
+    ? reflect(direction, hit.normal)
+    : refract(direction, hit.normal, refractiveIndex);
+
+    scattering.newRay = Ray(hit.position, scatterDirection);
+    scattering.color = material.color;
+    return true;
 }
 
 bool scatterEmitting(in Hit hit, in Material material, out Scattering scattering) {
