@@ -12,7 +12,7 @@ pub enum MaterialType {
 #[repr_std140]
 #[derive(Copy, Clone, Debug)]
 pub struct Material {
-    pub color: vec4,
+    pub texture_index: uint,
 
     /// The role of this parameter depends on the material type:
     /// - Diffusive: no function

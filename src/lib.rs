@@ -1,6 +1,5 @@
 use crate::{
     camera::Camera,
-    primitives::Sphere,
     render_surface::{RenderSurface, Vertex},
     scene::Scene,
     shaders::rt_shaders,
@@ -11,7 +10,10 @@ use vulkano::{
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SubpassContents},
     descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
     device::{physical::PhysicalDevice, Device, DeviceExtensions, Features, Queue},
-    image::{view::ImageView, ImageAccess, ImageUsage, SwapchainImage},
+    image::{
+        view::{ImageView, ImageViewType},
+        ImageAccess, ImageUsage, SwapchainImage,
+    },
     instance::Instance,
     pipeline::{
         graphics::{
@@ -22,6 +24,7 @@ use vulkano::{
         GraphicsPipeline, Pipeline, PipelineBindPoint,
     },
     render_pass::{Framebuffer, RenderPass, Subpass},
+    sampler::{Filter, Sampler, SamplerAddressMode},
     swapchain::{AcquireError, Surface, Swapchain, SwapchainCreationError},
     sync::{FlushError, GpuFuture},
     Version,
@@ -32,7 +35,6 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
-use crate::materials::{Material, MaterialType};
 
 mod camera;
 mod materials;
@@ -74,7 +76,12 @@ pub fn run_app() {
     let mut prev_frame_end = Some(vulkano::sync::now(Arc::clone(&device)).boxed());
 
     let camera_buf = {
-        let camera = Camera::new([0.0, 0.0, 0.0], surface.window().inner_size().into(), 30, 20);
+        let camera = Camera::new(
+            [0.0, 0.0, 0.0],
+            surface.window().inner_size().into(),
+            30,
+            20,
+        );
         CpuAccessibleBuffer::from_data(
             Arc::clone(&device),
             BufferUsage::uniform_buffer(),
@@ -84,8 +91,21 @@ pub fn run_app() {
         .expect("Cannot create uniform buffer for camera.")
     };
 
+    let scene = Scene::test_scene();
+
+    let textures_img = scene.get_texture_data(device.clone(), queues[0].clone());
+    let textures_img_view = ImageView::start(textures_img)
+        .ty(ImageViewType::Dim2dArray)
+        // .format(Format::R8G8B8A8_UNORM)
+        .build()
+        .expect("Cannot create textures image.");
+    let textures_sampler = Sampler::start(device.clone())
+        .filter(Filter::Linear)
+        .address_mode(SamplerAddressMode::ClampToEdge)
+        .build()
+        .expect("Cannot build sampler for textures.");
+
     let (shapes_buf, materials_buf) = {
-        let scene = Scene::test_scene();
         let (shapes_buf, shapes_fut) = ImmutableBuffer::from_iter(
             scene.get_shape_data().into_iter(),
             BufferUsage::storage_buffer(),
@@ -116,8 +136,9 @@ pub fn run_app() {
             Arc::clone(layout),
             [
                 WriteDescriptorSet::buffer(0, camera_buf.clone()),
-                WriteDescriptorSet::buffer(1, shapes_buf.clone()),
-                WriteDescriptorSet::buffer(2, materials_buf.clone()),
+                WriteDescriptorSet::buffer(1, shapes_buf),
+                WriteDescriptorSet::buffer(2, materials_buf),
+                WriteDescriptorSet::image_view_sampler(3, textures_img_view, textures_sampler),
             ],
         )
         .expect("Cannot create descriptor set.")

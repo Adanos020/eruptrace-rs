@@ -6,6 +6,9 @@ const float FLOAT_MAX = 3.402823466e+38f;
 const float FLOAT_MIN = 1.175494351e-38f;
 const float PI = 3.1415926535897932384626433832795f;
 const float TWO_PI = 2.f * PI;
+const float HALF_PI = 0.5f * PI;
+const float ONE_OVER_PI = 1.f / PI;
+const float ONE_OVER_TWO_PI = 1.f / (2.f * PI);
 
 // Material types ------------------------------------------------------------------------------------------------------
 
@@ -35,7 +38,7 @@ struct Sphere {
 };
 
 struct Material {
-    vec4 color;
+    uint textureIndex;
     float parameter;
 };
 
@@ -48,6 +51,7 @@ struct Hit {
     vec3 position;
     vec3 incidental;
     vec3 normal;
+    vec2 texCoords;
     float distance;
     uint materialType;
     uint materialIndex;
@@ -72,6 +76,7 @@ layout(set = 0, binding = 1) readonly buffer ShapesData {
 layout(set = 0, binding = 2, std140) readonly buffer MaterialData {
     Material materials[];
 };
+layout(set = 0, binding = 3) uniform sampler2DArray textures;
 
 // Utils ---------------------------------------------------------------------------------------------------------------
 
@@ -102,6 +107,17 @@ vec3 randDirection(float at) {
 
 vec3 pointOnRay(in Ray ray, float distance) {
     return ray.position + (ray.direction * distance);
+}
+
+vec2 mappingOnUnitSphere(vec3 pointOnSphere) {
+    return vec2(
+        1.f - ((atan(pointOnSphere.z, pointOnSphere.x) + PI) * ONE_OVER_TWO_PI),
+        1.f - ((asin(pointOnSphere.y) + HALF_PI) * ONE_OVER_PI)
+    );
+}
+
+vec4 sampleTexture(vec2 texCoords, uint textureIndex) {
+    return texture(textures, vec3(texCoords, textureIndex));
 }
 
 Sphere sphereAt(inout uint iShapeValue) {
@@ -163,8 +179,8 @@ vec4 trace(Ray ray) {
             }
         } else {
             // Sky
-            float factor = 0.5f * (normalize(ray.direction).y + 1.f);
-            finalColor *= vec4(mix(vec3(1.f), vec3(0.5f, 0.7f, 1.f), factor), 1.f);
+            vec3 rayDir = normalize(ray.direction);
+            finalColor *= sampleTexture(mappingOnUnitSphere(rayDir), 0);
             break;
         }
     }
@@ -214,16 +230,16 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
 
         vec3 hitPosition = pointOnRay(ray, root);
         vec3 normal = (hitPosition - sphere.position) / sphere.radius;
-        float dotDirNorm = dot(ray.direction, normal);
+        float dotRayNorm = dot(ray.direction, normal);
 
         hit.distance = root;
         hit.position = hitPosition;
-        hit.normal = normal;
-        hit.normal *= -sign(dotDirNorm);
+        hit.normal = normal * -sign(dotRayNorm);
         hit.incidental = ray.direction;
+        hit.texCoords = mappingOnUnitSphere(normalize(hitPosition - sphere.position));
         hit.materialType = sphere.materialType;
         hit.materialIndex = sphere.materialIndex;
-        hit.bFrontFace = dotDirNorm < 0.f;
+        hit.bFrontFace = dotRayNorm < 0.f;
         return true;
     }
 }
@@ -253,7 +269,7 @@ bool scatterDiffusive(in Hit hit, in Material material, out Scattering scatterin
     vec3 scatterDirection = randDirection(dot(hit.position, hit.position));
     scatterDirection *= sign(dot(scatterDirection, hit.normal));
     scattering.newRay = Ray(hit.position, normalize(scatterDirection));
-    scattering.color = material.color;
+    scattering.color = sampleTexture(hit.texCoords, material.textureIndex);
     return true;
 }
 
@@ -264,7 +280,7 @@ bool scatterReflective(in Hit hit, in Material material, out Scattering scatteri
     vec3 scatterDirection = reflected + (fuzz * randDir);
     scatterDirection *= sign(dot(scatterDirection, hit.normal));
     if (dot(scatterDirection, hit.normal) > 0.f) {
-        scattering.color = material.color;
+        scattering.color = sampleTexture(hit.texCoords, material.textureIndex);
         scattering.newRay = Ray(hit.position, scatterDirection);
         return true;
     }
@@ -278,22 +294,22 @@ bool scatterRefractive(in Hit hit, in Material material, out Scattering scatteri
     float sinTheta = sqrt(1.f - (cosTheta * cosTheta));
     bool cannotRefract = refractiveIndex * sinTheta > 1.f;
 
-    float r = (1.f - refractiveIndex) / (1.f + refractiveIndex);
-    r *= r;
-    float reflectance = r + (1.f - r) * pow((1.f - cosTheta), 5.f);
+    float reflectance = (1.f - refractiveIndex) / (1.f + refractiveIndex);
+    reflectance *= reflectance;
+    reflectance += (1.f - reflectance) * pow((1.f - cosTheta), 5.f);
     bool shouldReflect = reflectance > rand(dot(hit.position, hit.incidental));
 
     vec3 scatterDirection = (cannotRefract || shouldReflect)
-    ? reflect(direction, hit.normal)
-    : refract(direction, hit.normal, refractiveIndex);
+        ? reflect(direction, hit.normal)
+        : refract(direction, hit.normal, refractiveIndex);
 
+    scattering.color = sampleTexture(hit.texCoords, material.textureIndex);
     scattering.newRay = Ray(hit.position, scatterDirection);
-    scattering.color = material.color;
     return true;
 }
 
 bool scatterEmitting(in Hit hit, in Material material, out Scattering scattering) {
     float intensity = material.parameter;
-    scattering.color = intensity * material.color;
+    scattering.color = intensity * sampleTexture(hit.texCoords, material.textureIndex);
     return false;
 }
