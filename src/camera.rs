@@ -1,68 +1,58 @@
-#[repr(C)]
+use nalgebra_glm as glm;
+use std140::*;
+
+#[repr_std140]
+#[derive(Copy, Clone, Debug)]
+pub struct CameraUniform {
+    position: vec4,
+    horizontal: vec4,
+    vertical: vec4,
+    bottom_left: vec4,
+    img_size: vec2,
+    img_size_inv: vec2,
+    pub samples: uint,
+    pub max_reflections: uint,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct Camera {
-    position: [f32; 4],
-    horizontal: [f32; 4],
-    vertical: [f32; 4],
-    bottom_left: [f32; 4],
-    img_size: [f32; 2],
-    img_size_inv: [f32; 2],
+    pub position: glm::TVec3<f32>,
+    pub look_at: glm::TVec3<f32>,
+    pub up: glm::TVec3<f32>,
+    pub vertical_fov: f32,
+    pub img_size: [u32; 2],
     pub samples: u32,
     pub max_reflections: u32,
 }
 
 impl Camera {
-    pub fn new(position: [f32; 3], img_size: [u32; 2], samples: u32, max_reflections: u32) -> Self {
-        let img_size = [img_size[0] as f32, img_size[1] as f32];
-        let aspect = img_size[0] / img_size[1];
-        let viewport_height = 2.0;
-        let viewport_width = aspect * viewport_height;
-        let focal_length = 1.0;
-        Self {
-            position: [position[0], position[1], position[2], 0.0],
-            horizontal: [viewport_width, 0.0, 0.0, 0.0],
-            vertical: [0.0, viewport_height, 0.0, 0.0],
-            bottom_left: [
-                position[0] - (viewport_width * 0.5),
-                position[1] - (viewport_height * 0.5),
-                position[2] - focal_length,
-                0.0,
-            ],
-            img_size,
-            img_size_inv: [1.0 / img_size[0], 1.0 / img_size[1]],
-            samples,
-            max_reflections,
+    pub fn to_uniform(&self) -> CameraUniform {
+        let img_size = glm::vec2(self.img_size[0] as f32, self.img_size[1] as f32);
+        let aspect = img_size.x / img_size.y;
+        let half_height = (self.vertical_fov.to_radians() * 0.5).tan();
+        let half_width = aspect * half_height;
+        let focus_distance = glm::distance(&self.position, &self.look_at);
+
+        let w = (self.position - self.look_at).normalize();
+        let u = self.up.cross(&w).normalize();
+        let v = w.cross(&u);
+
+        let bottom_left = self.position
+            - (half_width * focus_distance * u)
+            - (half_height * focus_distance * v)
+            - (focus_distance * w);
+        let horizontal = 2.0 * half_width * focus_distance * u;
+        let vertical = 2.0 * half_height * focus_distance * v;
+
+        CameraUniform {
+            position: vec4(self.position.x, self.position.y, self.position.z, 0.0),
+            horizontal: vec4(horizontal.x, horizontal.y, horizontal.z, 0.0),
+            vertical: vec4(vertical.x, vertical.y, vertical.z, 0.0),
+            bottom_left: vec4(bottom_left.x, bottom_left.y, bottom_left.z, 0.0),
+            img_size: vec2(img_size.x, img_size.y),
+            img_size_inv: vec2(1.0 / img_size.x, 1.0 / img_size.y),
+            samples: uint(self.samples),
+            max_reflections: uint(self.max_reflections),
         }
-    }
-
-    #[must_use]
-    pub fn position(&self) -> [f32; 3] {
-        [self.position[0], self.position[1], self.position[2]]
-    }
-
-    pub fn set_position(&mut self, position: [f32; 3]) {
-        let aspect = self.img_size[0] / self.img_size[1];
-        let viewport_height = 2.0;
-        let viewport_width = aspect * viewport_height;
-        let focal_length = 1.0;
-        self.position = [position[0], position[1], position[2], 0.0];
-        self.bottom_left = [
-            position[0] - (viewport_width * 0.5),
-            position[1] - (viewport_height * 0.5),
-            position[2] - focal_length,
-            0.0,
-        ];
-    }
-
-    pub fn set_img_size(&mut self, img_size: [u32; 2]) {
-        self.img_size = [img_size[0] as f32, img_size[1] as f32];
-        let aspect = self.img_size[0] / self.img_size[1];
-        let viewport_height = 2.0;
-        let viewport_width = aspect * viewport_height;
-        self.img_size_inv = [1.0 / self.img_size[0], 1.0 / self.img_size[1]];
-        self.horizontal = [viewport_width, 0.0, 0.0, 0.0];
-        self.vertical = [0.0, viewport_height, 0.0, 0.0];
-        self.bottom_left[0] = self.position[0] - (viewport_width * 0.5);
-        self.bottom_left[1] = self.position[1] - (viewport_height * 0.5);
     }
 }

@@ -21,8 +21,8 @@ impl Scene {
             spheres: vec![
                 Sphere {
                     // Ground
-                    position: [0.0, -100.5, -1.0],
-                    radius: 100.0,
+                    position: [0.0, -200.5, -1.0],
+                    radius: 200.0,
                     material_type: MaterialType::Diffusive,
                     material_index: 0,
                 },
@@ -35,7 +35,7 @@ impl Scene {
                 },
                 Sphere {
                     // Middle back sphere
-                    position: [0.0, 2.5, -6.5],
+                    position: [0.0, 4.5, -6.5],
                     radius: 5.0,
                     material_type: MaterialType::Diffusive,
                     material_index: 2,
@@ -58,7 +58,7 @@ impl Scene {
             materials: vec![
                 Material {
                     // Ground
-                    texture_index: uint(3),
+                    texture_index: uint(4),
                     parameter: float(1.0),
                 },
                 Material {
@@ -87,6 +87,7 @@ impl Scene {
                 "textures/earth.png".to_string(),
                 "textures/jupiter.png".to_string(),
                 "textures/gray.png".to_string(),
+                "textures/venus.png".to_string(),
             ],
         }
     }

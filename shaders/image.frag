@@ -155,8 +155,8 @@ void main() {
     for (int i = 0; i < camera.samples; ++i) {
         float u = (gl_FragCoord.x + rand(i)) * camera.imgSizeInv.x;
         float v = (camera.imgSize.y - gl_FragCoord.y + rand(i + 0.5f)) * camera.imgSizeInv.y;
-        vec3 samplePosition = (camera.bottomLeft + (u * camera.horizontal) + (v * camera.vertical)).xyz;
-        ray.direction = samplePosition - camera.position.xyz;
+        vec4 samplePosition = camera.bottomLeft + (u * camera.horizontal) + (v * camera.vertical);
+        ray.direction = samplePosition.xyz - camera.position.xyz;
         pixelColor += trace(ray);
     }
     fragColour = sqrt(pixelColor / float(camera.samples));

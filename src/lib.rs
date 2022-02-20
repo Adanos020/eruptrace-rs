@@ -4,6 +4,7 @@ use crate::{
     scene::Scene,
     shaders::rt_shaders,
 };
+use nalgebra_glm as glm;
 use std::sync::Arc;
 use vulkano::{
     buffer::{BufferUsage, CpuAccessibleBuffer, ImmutableBuffer, TypedBufferAccess},
@@ -75,18 +76,21 @@ pub fn run_app() {
     let mut recreate_swapchain = false;
     let mut prev_frame_end = Some(vulkano::sync::now(Arc::clone(&device)).boxed());
 
+    let mut camera = Camera {
+        position: glm::vec3(0.5, 1.0, 2.0),
+        look_at: glm::vec3(0.0, 0.0, -1.0),
+        up: glm::vec3(0.0, 1.0, 0.0),
+        vertical_fov: 90.0,
+        img_size: surface.window().inner_size().into(),
+        samples: 30,
+        max_reflections: 10,
+    };
     let camera_buf = {
-        let camera = Camera::new(
-            [0.0, 0.0, 0.0],
-            surface.window().inner_size().into(),
-            30,
-            20,
-        );
         CpuAccessibleBuffer::from_data(
             Arc::clone(&device),
             BufferUsage::uniform_buffer(),
             false,
-            camera,
+            camera.to_uniform(),
         )
         .expect("Cannot create uniform buffer for camera.")
     };
@@ -96,7 +100,6 @@ pub fn run_app() {
     let textures_img = scene.get_texture_data(device.clone(), queues[0].clone());
     let textures_img_view = ImageView::start(textures_img)
         .ty(ImageViewType::Dim2dArray)
-        // .format(Format::R8G8B8A8_UNORM)
         .build()
         .expect("Cannot create textures image.");
     let textures_sampler = Sampler::start(device.clone())
@@ -177,7 +180,10 @@ pub fn run_app() {
                             recreate_swapchain = false;
 
                             match camera_buf.write() {
-                                Ok(mut camera_lock) => camera_lock.set_img_size(dimensions),
+                                Ok(mut camera_lock) => {
+                                    camera.img_size = dimensions;
+                                    *camera_lock = camera.to_uniform();
+                                }
                                 Err(_) => eprintln!("Cannot get a write lock on camera buffer."),
                             }
                         }
