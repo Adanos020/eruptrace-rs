@@ -1,5 +1,6 @@
 use crate::{materials::*, primitives::*};
 use image::EncodableLayout;
+use nalgebra_glm as glm;
 use std::{mem::size_of, sync::Arc};
 use std140::*;
 use vulkano::{
@@ -21,35 +22,35 @@ impl Scene {
             spheres: vec![
                 Sphere {
                     // Ground
-                    position: [0.0, -200.5, -1.0],
+                    position: glm::vec3(0.0, -200.5, -1.0),
                     radius: 200.0,
                     material_type: MaterialType::Diffusive,
                     material_index: 0,
                 },
                 Sphere {
-                    // Middle sphere
-                    position: [0.0, 0.0, -1.0],
-                    radius: 0.5,
-                    material_type: MaterialType::Diffusive,
-                    material_index: 1,
-                },
-                Sphere {
                     // Middle back sphere
-                    position: [0.0, 4.5, -6.5],
+                    position: glm::vec3(0.0, 4.5, -6.5),
                     radius: 5.0,
                     material_type: MaterialType::Diffusive,
                     material_index: 2,
                 },
                 Sphere {
+                    // Middle sphere
+                    position: glm::vec3(0.0, 0.0, -1.0),
+                    radius: 0.5,
+                    material_type: MaterialType::Diffusive,
+                    material_index: 1,
+                },
+                Sphere {
                     // Left sphere
-                    position: [-1.0, 0.0, -1.0],
+                    position: glm::vec3(-1.0, 0.0, -1.0),
                     radius: 0.5,
                     material_type: MaterialType::Reflective,
                     material_index: 3,
                 },
                 Sphere {
                     // Right sphere
-                    position: [1.0, 0.0, -1.0],
+                    position: glm::vec3(1.0, 0.0, -1.0),
                     radius: 0.5,
                     material_type: MaterialType::Refractive,
                     material_index: 4,
@@ -88,6 +89,81 @@ impl Scene {
                 "textures/jupiter.png".to_string(),
                 "textures/gray.png".to_string(),
                 "textures/venus.png".to_string(),
+            ],
+        }
+    }
+
+    pub fn text_dark_scene() -> Self {
+        Self {
+            spheres: vec![
+                Sphere {
+                    // Ground
+                    position: glm::vec3(0.0, -200.5, -1.0),
+                    radius: 200.0,
+                    material_type: MaterialType::Diffusive,
+                    material_index: 0,
+                },
+                Sphere {
+                    // Middle back sphere
+                    position: glm::vec3(0.0, 4.5, -6.5),
+                    radius: 5.0,
+                    material_type: MaterialType::Emitting,
+                    material_index: 1,
+                },
+                Sphere {
+                    // Middle sphere
+                    position: glm::vec3(0.0, 0.0, -1.0),
+                    radius: 0.5,
+                    material_type: MaterialType::Diffusive,
+                    material_index: 2,
+                },
+                Sphere {
+                    // Left sphere
+                    position: glm::vec3(-1.0, 0.0, -1.0),
+                    radius: 0.5,
+                    material_type: MaterialType::Reflective,
+                    material_index: 3,
+                },
+                Sphere {
+                    // Right sphere
+                    position: glm::vec3(1.0, 0.0, -1.0),
+                    radius: 0.5,
+                    material_type: MaterialType::Refractive,
+                    material_index: 4,
+                },
+            ],
+            materials: vec![
+                Material {
+                    // Ground
+                    texture_index: uint(4),
+                    parameter: float(1.0),
+                },
+                Material {
+                    // Light
+                    texture_index: uint(1),
+                    parameter: float(0.25),
+                },
+                Material {
+                    // Middle sphere
+                    texture_index: uint(2),
+                    parameter: float(1.0),
+                },
+                Material {
+                    // Left sphere
+                    texture_index: uint(3),
+                    parameter: float(0.1),
+                },
+                Material {
+                    // Right sphere
+                    texture_index: uint(3),
+                    parameter: float(1.5),
+                },
+            ],
+            texture_paths: vec![
+                "textures/sky_night.png".to_string(),
+                "textures/white.png".to_string(),
+                "textures/earth.png".to_string(),
+                "textures/gray.png".to_string(),
             ],
         }
     }
