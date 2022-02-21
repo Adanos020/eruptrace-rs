@@ -164,6 +164,7 @@ impl Scene {
                 "textures/sun.png".to_string(),
                 "textures/earth.png".to_string(),
                 "textures/gray.png".to_string(),
+                "textures/jupiter.png".to_string(),
             ],
         }
     }
