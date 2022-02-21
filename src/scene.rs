@@ -141,7 +141,7 @@ impl Scene {
                 Material {
                     // Light
                     texture_index: uint(1),
-                    parameter: float(0.25),
+                    parameter: float(5.0),
                 },
                 Material {
                     // Middle sphere
@@ -161,7 +161,7 @@ impl Scene {
             ],
             texture_paths: vec![
                 "textures/sky_night.png".to_string(),
-                "textures/white.png".to_string(),
+                "textures/sun.png".to_string(),
                 "textures/earth.png".to_string(),
                 "textures/gray.png".to_string(),
             ],

@@ -82,7 +82,7 @@ pub fn run_app() {
         up: glm::vec3(0.0, 1.0, 0.0),
         vertical_fov: 90.0,
         img_size: surface.window().inner_size().into(),
-        samples: 30,
+        samples: 100,
         max_reflections: 10,
     };
     let camera_buf = {

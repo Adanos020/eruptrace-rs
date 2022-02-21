@@ -174,7 +174,7 @@ vec4 trace(Ray ray) {
                 ray = scattering.newRay;
             } else {
                 // Emission
-                finalColor += scattering.color;
+                finalColor *= scattering.color;
                 break;
             }
         } else {
