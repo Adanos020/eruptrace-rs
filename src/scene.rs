@@ -93,7 +93,7 @@ impl Scene {
         }
     }
 
-    pub fn text_dark_scene() -> Self {
+    pub fn test_dark_scene() -> Self {
         Self {
             spheres: vec![
                 Sphere {
@@ -104,9 +104,9 @@ impl Scene {
                     material_index: 0,
                 },
                 Sphere {
-                    // Middle back sphere
-                    position: glm::vec3(0.0, 4.5, -6.5),
-                    radius: 5.0,
+                    // Light
+                    position: glm::vec3(0.0, 1.5, -6.5),
+                    radius: 2.0,
                     material_type: MaterialType::Emitting,
                     material_index: 1,
                 },

@@ -95,7 +95,7 @@ pub fn run_app() {
         .expect("Cannot create uniform buffer for camera.")
     };
 
-    let scene = Scene::text_dark_scene();
+    let scene = Scene::test_dark_scene();
 
     let textures_img = scene.get_texture_data(device.clone(), queues[0].clone());
     let textures_img_view = ImageView::start(textures_img)
