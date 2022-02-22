@@ -4,34 +4,19 @@ pub mod scene;
 pub mod shaders;
 
 use crate::{
-    camera::CameraUniform,
-    render_surface::{RenderSurface, Vertex},
-    scene::make_scene_buffers,
+    camera::CameraUniform, render_surface::RenderSurface, scene::make_scene_buffers,
     shaders::rt_shaders,
 };
 use eruptrace_scene::{camera::Camera, example_scenes};
 use nalgebra_glm as glm;
 use std::sync::Arc;
 use vulkano::{
-    buffer::TypedBufferAccess,
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SubpassContents},
-    descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
     device::{physical::PhysicalDevice, Device, DeviceExtensions, Features, Queue},
-    image::{
-        view::{ImageView, ImageViewType},
-        ImageAccess, ImageUsage, SwapchainImage,
-    },
+    image::{view::ImageView, ImageAccess, ImageUsage, SwapchainImage},
     instance::Instance,
-    pipeline::{
-        graphics::{
-            input_assembly::InputAssemblyState,
-            vertex_input::BuffersDefinition,
-            viewport::{Viewport, ViewportState},
-        },
-        GraphicsPipeline, Pipeline, PipelineBindPoint,
-    },
-    render_pass::{Framebuffer, RenderPass, Subpass},
-    sampler::{Filter, Sampler, SamplerAddressMode},
+    pipeline::graphics::viewport::Viewport,
+    render_pass::{Framebuffer, RenderPass},
     swapchain::{AcquireError, Swapchain, SwapchainCreationError},
     sync::{FlushError, GpuFuture},
     Version,
@@ -127,8 +112,6 @@ pub fn run_app() {
             .expect("Cannot create swapchain.")
     };
 
-    let render_surface = RenderSurface::new(device.clone(), queues[0].clone());
-
     let render_pass = vulkano::single_pass_renderpass!(
         device.clone(),
         attachments: {
@@ -145,35 +128,6 @@ pub fn run_app() {
         }
     )
     .expect("Cannot create render pass object.");
-
-    let graphics_pipeline = {
-        let vertex_shader =
-            rt_shaders::load_vertex(device.clone()).expect("Cannot load vertex shader.");
-        let fragment_shader =
-            rt_shaders::load_fragment(device.clone()).expect("Cannot load fragment shader.");
-        GraphicsPipeline::start()
-            .vertex_input_state(BuffersDefinition::new().vertex::<Vertex>())
-            .vertex_shader(
-                vertex_shader
-                    .entry_point("main")
-                    .expect("Cannot bind vertex shader with entry point 'main'."),
-                (),
-            )
-            .input_assembly_state(InputAssemblyState::new())
-            .viewport_state(ViewportState::viewport_dynamic_scissor_irrelevant())
-            .fragment_shader(
-                fragment_shader
-                    .entry_point("main")
-                    .expect("Cannot bind fragment shader with entry point 'main'."),
-                (),
-            )
-            .render_pass(
-                Subpass::from(render_pass.clone(), 0)
-                    .expect("Cannot create subpass for render pass."),
-            )
-            .build(device.clone())
-            .expect("Cannot create graphics pipeline object.")
-    };
 
     let mut viewport = Viewport {
         origin: [0.0, 0.0],
@@ -202,35 +156,15 @@ pub fn run_app() {
     };
 
     let scene = example_scenes::test_dark_scene();
-    let (shapes_buf, materials_buf, textures_img) =
-        make_scene_buffers(device.clone(), queues[0].clone(), scene);
-    let textures_img_view = ImageView::start(textures_img)
-        .ty(ImageViewType::Dim2dArray)
-        .build()
-        .expect("Cannot create textures image.");
-    let textures_sampler = Sampler::start(device.clone())
-        .filter(Filter::Linear)
-        .address_mode(SamplerAddressMode::ClampToEdge)
-        .build()
-        .expect("Cannot build sampler for textures.");
-
-    let uniform_descriptor_set = {
-        let layout = graphics_pipeline
-            .layout()
-            .descriptor_set_layouts()
-            .get(0)
-            .expect("Cannot get the layout of descriptor set 0.");
-        PersistentDescriptorSet::new(
-            layout.clone(),
-            [
-                WriteDescriptorSet::buffer(0, camera_buf.clone()),
-                WriteDescriptorSet::buffer(1, shapes_buf),
-                WriteDescriptorSet::buffer(2, materials_buf),
-                WriteDescriptorSet::image_view_sampler(3, textures_img_view, textures_sampler),
-            ],
-        )
-        .expect("Cannot create descriptor set.")
-    };
+    let (shapes_buf, materials_buf, textures_img) = make_scene_buffers(queues[0].clone(), scene);
+    let render_surface = RenderSurface::new(
+        queues[0].clone(),
+        render_pass.clone(),
+        camera_buf.clone(),
+        shapes_buf,
+        materials_buf,
+        textures_img,
+    );
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -300,18 +234,9 @@ pub fn run_app() {
                                     clear_values,
                                 )
                                 .expect("Cannot begin render pass.")
-                                .set_viewport(0, [viewport.clone()])
-                                .bind_pipeline_graphics(graphics_pipeline.clone())
-                                .bind_descriptor_sets(
-                                    PipelineBindPoint::Graphics,
-                                    Arc::clone(graphics_pipeline.layout()),
-                                    0,
-                                    uniform_descriptor_set.clone(),
-                                )
-                                .bind_vertex_buffers(0, render_surface.vertex_buffer.clone())
-                                .bind_index_buffer(render_surface.index_buffer.clone())
-                                .draw_indexed(render_surface.index_buffer.len() as u32, 1, 0, 0, 0)
-                                .expect("Cannot execute draw command.")
+                                .set_viewport(0, [viewport.clone()]);
+                            render_surface.draw(&mut cb_builder);
+                            cb_builder
                                 .end_render_pass()
                                 .expect("Cannot end render pass.");
                             cb_builder.build().expect("Cannot build command buffer.")

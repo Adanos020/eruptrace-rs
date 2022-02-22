@@ -6,7 +6,7 @@ use std::{mem::size_of, sync::Arc};
 use std140::*;
 use vulkano::{
     buffer::{BufferUsage, ImmutableBuffer},
-    device::{Device, Queue},
+    device::Queue,
     format::Format,
     image::{ImageDimensions, ImmutableImage, MipmapsCount},
     sync::GpuFuture,
@@ -21,36 +21,30 @@ pub struct MaterialStd140 {
 
 pub type ShapesBuffer = Arc<ImmutableBuffer<[f32]>>;
 pub type MaterialsBuffer = Arc<ImmutableBuffer<[MaterialStd140]>>;
-pub type TexturesBuffer = Arc<ImmutableImage>;
+pub type TexturesImage = Arc<ImmutableImage>;
 
 pub fn make_scene_buffers(
-    device: Arc<Device>,
     queue: Arc<Queue>,
     scene: Scene,
-) -> (ShapesBuffer, MaterialsBuffer, TexturesBuffer) {
-    let Scene {
-        spheres,
-        materials,
-        texture_paths,
-    } = scene;
-    let n_textures = texture_paths.len();
-    let shapes = get_shapes_data(spheres);
-    let materials = get_material_data(materials);
-    let textures = get_texture_data(texture_paths);
+) -> (ShapesBuffer, MaterialsBuffer, TexturesImage) {
+    let n_textures = scene.texture_paths.len();
+    let shapes = get_shapes_data(scene.spheres);
+    let materials = get_material_data(scene.materials);
+    let textures = get_texture_data(scene.texture_paths);
 
     let (shapes_buffer, shapes_future) = ImmutableBuffer::from_iter(
         shapes.into_iter(),
         BufferUsage::storage_buffer(),
-        Arc::clone(&queue),
+        queue.clone(),
     )
-    .expect("Cannot create buffer for shapes in scene.");
+    .expect("Cannot create buffer for shapes.");
 
     let (materials_buffer, materials_future) = ImmutableBuffer::from_iter(
         materials.into_iter(),
         BufferUsage::storage_buffer(),
-        Arc::clone(&queue),
+        queue.clone(),
     )
-    .expect("Cannot create buffer for materials in scene.");
+    .expect("Cannot create buffer for materials.");
 
     let (textures_image, textures_future) = ImmutableImage::from_iter(
         textures,
@@ -61,11 +55,11 @@ pub fn make_scene_buffers(
         },
         MipmapsCount::One,
         Format::R8G8B8A8_UNORM,
-        queue,
+        queue.clone(),
     )
     .expect("Cannot create textures image.");
 
-    vulkano::sync::now(device)
+    vulkano::sync::now(queue.device().clone())
         .join(shapes_future)
         .join(materials_future)
         .join(textures_future)

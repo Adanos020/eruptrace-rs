@@ -22,8 +22,10 @@ pub struct CameraUniform {
     pub max_reflections: uint,
 }
 
+pub type CameraUniformBuffer = Arc<CpuAccessibleBuffer<CameraUniform>>;
+
 impl CameraUniform {
-    pub fn to_buffer(self, device: Arc<Device>) -> Arc<CpuAccessibleBuffer<CameraUniform>> {
+    pub fn to_buffer(self, device: Arc<Device>) -> CameraUniformBuffer {
         CpuAccessibleBuffer::from_data(device, BufferUsage::uniform_buffer(), false, self)
             .expect("Cannot create uniform buffer for camera.")
     }
