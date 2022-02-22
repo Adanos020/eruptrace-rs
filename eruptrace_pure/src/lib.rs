@@ -150,21 +150,36 @@ pub fn run_app() {
         samples: 100,
         max_reflections: 10,
     };
+    let scene = example_scenes::spheres_night();
+
     let camera_buf = {
         let camera_uniform: CameraUniform = camera.into();
         camera_uniform.to_buffer(device.clone())
     };
+    let (
+        (shapes_buffer, shapes_future),
+        (materials_buffer, materials_future),
+        (textures_image, textures_future),
+    ) = make_scene_buffers(queues[0].clone(), scene);
 
-    let scene = example_scenes::spheres_night();
-    let (shapes_buf, materials_buf, textures_img) = make_scene_buffers(queues[0].clone(), scene);
-    let render_surface = RenderSurface::new(
+    let (render_surface, render_surface_vb_future) = RenderSurface::new(
         queues[0].clone(),
         render_pass.clone(),
         camera_buf.clone(),
-        shapes_buf,
-        materials_buf,
-        textures_img,
+        shapes_buffer,
+        materials_buffer,
+        textures_image,
     );
+
+    vulkano::sync::now(device.clone())
+        .join(shapes_future)
+        .join(materials_future)
+        .join(textures_future)
+        .join(render_surface_vb_future)
+        .then_signal_fence_and_flush()
+        .expect("Cannot flush.")
+        .wait(None)
+        .expect("Cannot wait.");
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;

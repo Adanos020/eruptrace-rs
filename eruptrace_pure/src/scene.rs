@@ -6,10 +6,11 @@ use std::{mem::size_of, sync::Arc};
 use std140::*;
 use vulkano::{
     buffer::{BufferUsage, ImmutableBuffer},
+    command_buffer::{CommandBufferExecFuture, PrimaryAutoCommandBuffer},
     device::Queue,
     format::Format,
     image::{ImageDimensions, ImmutableImage, MipmapsCount},
-    sync::GpuFuture,
+    sync::NowFuture,
 };
 
 #[repr_std140]
@@ -22,11 +23,18 @@ pub struct MaterialStd140 {
 pub type ShapesBuffer = Arc<ImmutableBuffer<[f32]>>;
 pub type MaterialsBuffer = Arc<ImmutableBuffer<[MaterialStd140]>>;
 pub type TexturesImage = Arc<ImmutableImage>;
+pub type ShapesFuture = CommandBufferExecFuture<NowFuture, PrimaryAutoCommandBuffer>;
+pub type MaterialsFuture = CommandBufferExecFuture<NowFuture, PrimaryAutoCommandBuffer>;
+pub type TexturesFuture = CommandBufferExecFuture<NowFuture, PrimaryAutoCommandBuffer>;
 
 pub fn make_scene_buffers(
     queue: Arc<Queue>,
     scene: Scene,
-) -> (ShapesBuffer, MaterialsBuffer, TexturesImage) {
+) -> (
+    (ShapesBuffer, ShapesFuture),
+    (MaterialsBuffer, MaterialsFuture),
+    (TexturesImage, TexturesFuture),
+) {
     let n_textures = scene.texture_paths.len();
     let shapes = get_shapes_data(scene.spheres);
     let materials = get_material_data(scene.materials);
@@ -55,20 +63,15 @@ pub fn make_scene_buffers(
         },
         MipmapsCount::One,
         Format::R8G8B8A8_UNORM,
-        queue.clone(),
+        queue,
     )
     .expect("Cannot create textures image.");
 
-    vulkano::sync::now(queue.device().clone())
-        .join(shapes_future)
-        .join(materials_future)
-        .join(textures_future)
-        .then_signal_fence_and_flush()
-        .expect("Cannot flush.")
-        .wait(None)
-        .expect("Cannot wait.");
-
-    (shapes_buffer, materials_buffer, textures_image)
+    (
+        (shapes_buffer, shapes_future),
+        (materials_buffer, materials_future),
+        (textures_image, textures_future),
+    )
 }
 
 fn get_shapes_data(spheres: Vec<Sphere>) -> Vec<f32> {
@@ -88,13 +91,9 @@ fn get_shapes_data(spheres: Vec<Sphere>) -> Vec<f32> {
 }
 
 fn get_material_data(materials: Vec<Material>) -> Vec<MaterialStd140> {
-    let to_std140 = |mat: Material| {
-        let texture_index = uint(mat.texture_index);
-        let parameter = float(mat.parameter);
-        MaterialStd140 {
-            texture_index,
-            parameter,
-        }
+    let to_std140 = |mat: Material| MaterialStd140 {
+        texture_index: uint(mat.texture_index),
+        parameter: float(mat.parameter),
     };
     materials.into_iter().map(to_std140).collect()
 }

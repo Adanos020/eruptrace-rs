@@ -6,7 +6,7 @@ use crate::{
 use std::sync::Arc;
 use vulkano::{
     buffer::{BufferUsage, ImmutableBuffer, TypedBufferAccess},
-    command_buffer::{AutoCommandBufferBuilder, PrimaryAutoCommandBuffer},
+    command_buffer::{AutoCommandBufferBuilder, CommandBufferExecFuture, PrimaryAutoCommandBuffer},
     descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet},
     device::Queue,
     image::view::{ImageView, ImageViewType},
@@ -20,21 +20,23 @@ use vulkano::{
     },
     render_pass::{RenderPass, Subpass},
     sampler::{Filter, Sampler, SamplerAddressMode},
-    sync::GpuFuture,
+    sync::NowFuture,
 };
 
 #[derive(Copy, Clone, Default, Debug)]
-pub struct Vertex {
+struct RenderSurfaceVertex {
     pub position: [f32; 2],
 }
 
-vulkano::impl_vertex!(Vertex, position);
+vulkano::impl_vertex!(RenderSurfaceVertex, position);
 
 pub struct RenderSurface {
-    pub vertex_buffer: Arc<ImmutableBuffer<[Vertex]>>,
-    pub pipeline: Arc<GraphicsPipeline>,
-    pub uniform_descriptor_set: Arc<PersistentDescriptorSet>,
+    vertex_buffer: Arc<ImmutableBuffer<[RenderSurfaceVertex]>>,
+    pipeline: Arc<GraphicsPipeline>,
+    uniform_descriptor_set: Arc<PersistentDescriptorSet>,
 }
+
+pub type RenderSurfaceVbFuture = CommandBufferExecFuture<NowFuture, PrimaryAutoCommandBuffer>;
 
 impl RenderSurface {
     pub fn new(
@@ -44,32 +46,26 @@ impl RenderSurface {
         shapes_buf: ShapesBuffer,
         materials_buf: MaterialsBuffer,
         textures_img: TexturesImage,
-    ) -> Self {
+    ) -> (Self, RenderSurfaceVbFuture) {
         let vertices = [
-            Vertex {
+            RenderSurfaceVertex {
                 position: [-1.0, -1.0],
             },
-            Vertex {
+            RenderSurfaceVertex {
                 position: [1.0, -1.0],
             },
-            Vertex {
+            RenderSurfaceVertex {
                 position: [-1.0, 1.0],
             },
-            Vertex {
+            RenderSurfaceVertex {
                 position: [1.0, 1.0],
             },
         ];
 
-        let (vertex_buffer, vb_future) =
+        let (vertex_buffer, vb_future) = {
             ImmutableBuffer::from_iter(vertices, BufferUsage::vertex_buffer(), queue.clone())
-                .expect("Cannot create vertex buffer.");
-
-        vulkano::sync::now(queue.device().clone())
-            .join(vb_future)
-            .then_signal_fence_and_flush()
-            .expect("Cannot upload vertex and index buffers.")
-            .wait(None)
-            .expect("Cannot wait.");
+                .expect("Cannot create vertex buffer.")
+        };
 
         let pipeline = {
             let vertex_shader = rt_shaders::load_vertex(queue.device().clone())
@@ -77,7 +73,7 @@ impl RenderSurface {
             let fragment_shader = rt_shaders::load_fragment(queue.device().clone())
                 .expect("Cannot load fragment shader.");
             GraphicsPipeline::start()
-                .vertex_input_state(BuffersDefinition::new().vertex::<Vertex>())
+                .vertex_input_state(BuffersDefinition::new().vertex::<RenderSurfaceVertex>())
                 .vertex_shader(
                     vertex_shader
                         .entry_point("main")
@@ -128,11 +124,14 @@ impl RenderSurface {
             .expect("Cannot create descriptor set.")
         };
 
-        Self {
-            vertex_buffer,
-            pipeline,
-            uniform_descriptor_set,
-        }
+        (
+            Self {
+                vertex_buffer,
+                pipeline,
+                uniform_descriptor_set,
+            },
+            vb_future,
+        )
     }
 
     pub fn draw(&self, cb_builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) {
@@ -140,7 +139,7 @@ impl RenderSurface {
             .bind_pipeline_graphics(self.pipeline.clone())
             .bind_descriptor_sets(
                 PipelineBindPoint::Graphics,
-                Arc::clone(self.pipeline.layout()),
+                self.pipeline.layout().clone(),
                 0,
                 self.uniform_descriptor_set.clone(),
             )
