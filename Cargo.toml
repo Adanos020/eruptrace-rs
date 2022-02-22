@@ -1,15 +1,18 @@
+[workspace]
+
+members = [
+    "eruptrace_pure",
+    "eruptrace_scene",
+]
+
 [package]
 name = "eruptrace-rs"
 version = "0.1.0"
+authors = ["Adam Gąsior"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-image = "0.24"
-nalgebra-glm = "0.16"
-std140 = "0.2"
-vulkano = "0.28"
-vulkano-shaders = "0.28"
-vulkano-win = "0.28"
-winit = "0.26"
+eruptrace_pure = { path = "eruptrace_pure" }
+eruptrace_scene = { path = "eruptrace_scene" }

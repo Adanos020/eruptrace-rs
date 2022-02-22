@@ -1,4 +1,4 @@
-use eruptrace_rs::run_app;
+use eruptrace_pure::run_app;
 
 fn main() {
     run_app();

@@ -1,5 +1,3 @@
-use std140::*;
-
 #[repr(u32)]
 #[derive(Copy, Clone, Debug)]
 pub enum MaterialType {
@@ -9,15 +7,14 @@ pub enum MaterialType {
     Emitting = 3,
 }
 
-#[repr_std140]
 #[derive(Copy, Clone, Debug)]
 pub struct Material {
-    pub texture_index: uint,
+    pub texture_index: u32,
 
     /// The role of this parameter depends on the material type:
     /// - Diffusive: no function
     /// - Reflective: fuzz
     /// - Refractive: refractive index
     /// - Emitting: intensity
-    pub parameter: float,
+    pub parameter: f32,
 }
