@@ -1,7 +1,7 @@
 use crate::{materials::*, primitives::*, Scene};
 use nalgebra_glm as glm;
 
-pub fn test_scene() -> Scene {
+pub fn spheres_day() -> Scene {
     Scene {
         spheres: vec![
             Sphere {
@@ -77,7 +77,7 @@ pub fn test_scene() -> Scene {
     }
 }
 
-pub fn test_dark_scene() -> Scene {
+pub fn spheres_night() -> Scene {
     Scene {
         spheres: vec![
             Sphere {

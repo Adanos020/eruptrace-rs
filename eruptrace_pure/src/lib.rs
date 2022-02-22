@@ -155,7 +155,7 @@ pub fn run_app() {
         camera_uniform.to_buffer(device.clone())
     };
 
-    let scene = example_scenes::test_dark_scene();
+    let scene = example_scenes::spheres_night();
     let (shapes_buf, materials_buf, textures_img) = make_scene_buffers(queues[0].clone(), scene);
     let render_surface = RenderSurface::new(
         queues[0].clone(),
