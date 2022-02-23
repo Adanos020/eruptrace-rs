@@ -40,6 +40,7 @@ pub fn spheres_day() -> Scene {
                 material_index: 4,
             },
         ],
+        triangles: vec![],
         materials: vec![
             Material {
                 // Ground
@@ -116,6 +117,7 @@ pub fn spheres_night() -> Scene {
                 material_index: 4,
             },
         ],
+        triangles: vec![],
         materials: vec![
             Material {
                 // Ground
@@ -149,6 +151,41 @@ pub fn spheres_night() -> Scene {
             "textures/earth.png".to_string(),
             "textures/gray.png".to_string(),
             "textures/jupiter.png".to_string(),
+        ],
+    }
+}
+
+pub fn hello_triangle() -> Scene {
+    Scene {
+        spheres: vec![],
+        triangles: vec![Triangle {
+            vertices: [
+                PolygonVertex {
+                    position: glm::vec3(-0.5, 0.0, -1.0),
+                    normal: glm::vec3(0.0, 0.0, 1.0),
+                    texture_coordinate: glm::vec2(0.0, 1.0),
+                },
+                PolygonVertex {
+                    position: glm::vec3(0.5, 0.0, -1.0),
+                    normal: glm::vec3(0.0, 0.0, 1.0),
+                    texture_coordinate: glm::vec2(1.0, 1.0),
+                },
+                PolygonVertex {
+                    position: glm::vec3(0.0, 0.5, -1.0),
+                    normal: glm::vec3(0.0, 0.0, 1.0),
+                    texture_coordinate: glm::vec2(0.5, 0.0),
+                },
+            ],
+            material_type: MaterialType::Diffusive,
+            material_index: 0,
+        }],
+        materials: vec![Material {
+            texture_index: 1,
+            parameter: 1.0,
+        }],
+        texture_paths: vec![
+            "textures/sky.png".to_string(),
+            "textures/sun.png".to_string(),
         ],
     }
 }

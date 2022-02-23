@@ -1,6 +1,10 @@
 #![allow(clippy::no_effect)]
 
-use eruptrace_scene::{materials::Material, primitives::Sphere, Scene};
+use eruptrace_scene::{
+    materials::Material,
+    primitives::{Sphere, Triangle},
+    Scene,
+};
 use image::EncodableLayout;
 use std::{mem::size_of, sync::Arc};
 use std140::*;
@@ -36,7 +40,7 @@ pub fn make_scene_buffers(
     (TexturesImage, TexturesFuture),
 ) {
     let n_textures = scene.texture_paths.len();
-    let shapes = get_shapes_data(scene.spheres);
+    let shapes = get_shapes_data(scene.spheres, scene.triangles);
     let materials = get_material_data(scene.materials);
     let textures = get_texture_data(scene.texture_paths);
 
@@ -74,17 +78,37 @@ pub fn make_scene_buffers(
     )
 }
 
-fn get_shapes_data(spheres: Vec<Sphere>) -> Vec<f32> {
-    let mut data = Vec::with_capacity(spheres.len() * size_of::<Sphere>());
+fn get_shapes_data(spheres: Vec<Sphere>, triangles: Vec<Triangle>) -> Vec<f32> {
+    let mut data = Vec::with_capacity({
+        let n_spheres = spheres.len() * size_of::<Sphere>();
+        let n_triangles = triangles.len() * size_of::<Triangle>();
+        n_spheres + n_triangles
+    });
 
     data.push(spheres.len() as f32);
-    for sphere in spheres.iter() {
-        data.push(sphere.position[0]);
-        data.push(sphere.position[1]);
-        data.push(sphere.position[2]);
+    for sphere in spheres.into_iter() {
+        data.push(sphere.position.x);
+        data.push(sphere.position.y);
+        data.push(sphere.position.z);
         data.push(sphere.radius as f32);
         data.push(sphere.material_type as u32 as f32);
         data.push(sphere.material_index as f32);
+    }
+
+    data.push(triangles.len() as f32);
+    for triangle in triangles.into_iter() {
+        for vertex in triangle.vertices {
+            data.push(vertex.position.x);
+            data.push(vertex.position.y);
+            data.push(vertex.position.z);
+            data.push(vertex.normal.x);
+            data.push(vertex.normal.y);
+            data.push(vertex.normal.z);
+            data.push(vertex.texture_coordinate.x);
+            data.push(vertex.texture_coordinate.y);
+        }
+        data.push(triangle.material_type as u32 as f32);
+        data.push(triangle.material_index as f32);
     }
 
     data

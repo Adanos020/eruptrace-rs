@@ -7,6 +7,7 @@ use crate::{materials::*, primitives::*};
 
 pub struct Scene {
     pub spheres: Vec<Sphere>,
+    pub triangles: Vec<Triangle>,
     pub materials: Vec<Material>,
     pub texture_paths: Vec<String>,
 }

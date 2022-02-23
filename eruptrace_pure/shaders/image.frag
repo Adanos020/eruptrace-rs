@@ -4,6 +4,7 @@
 
 const float FLOAT_MAX = 3.402823466e+38f;
 const float FLOAT_MIN = 1.175494351e-38f;
+const float EPSILON = 1e-5;
 const float PI = 3.1415926535897932384626433832795f;
 const float TWO_PI = 2.f * PI;
 const float HALF_PI = 0.5f * PI;
@@ -30,9 +31,23 @@ struct Camera {
     uint maxReflections;
 };
 
+struct Vertex {
+    vec3 position;
+    vec3 normal;
+    vec2 texCoords;
+};
+
 struct Sphere {
     vec3 position;
     float radius;
+    uint materialType;
+    uint materialIndex;
+};
+
+struct Triangle {
+    Vertex a;
+    Vertex b;
+    Vertex c;
     uint materialType;
     uint materialIndex;
 };
@@ -121,18 +136,31 @@ vec4 sampleTexture(vec2 texCoords, uint textureIndex) {
 }
 
 Sphere sphereAt(inout uint iShapeValue) {
-    return Sphere(
-        // Position
-        vec3(shapeValues[iShapeValue++],
-             shapeValues[iShapeValue++],
-             shapeValues[iShapeValue++]),
-        // Radius
-        shapeValues[iShapeValue++],
-        // Material type
-        uint(shapeValues[iShapeValue++]),
-        // Material index
-        uint(shapeValues[iShapeValue++])
-    );
+    Sphere s;
+    s.position      = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
+    s.radius        = shapeValues[iShapeValue++];
+    s.materialType  = uint(shapeValues[iShapeValue++]);
+    s.materialIndex = uint(shapeValues[iShapeValue++]);
+    return s;
+}
+
+Triangle triangleAt(inout uint iShapeValue) {
+    Triangle t;
+    t.a.position  = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
+    t.a.normal    = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
+    t.a.texCoords = vec2(shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
+
+    t.b.position  = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
+    t.b.normal    = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
+    t.b.texCoords = vec2(shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
+
+    t.c.position  = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
+    t.c.normal    = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
+    t.c.texCoords = vec2(shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
+
+    t.materialType  = uint(shapeValues[iShapeValue++]);
+    t.materialIndex = uint(shapeValues[iShapeValue++]);
+    return t;
 }
 
 // Ray tracing ---------------------------------------------------------------------------------------------------------
@@ -141,6 +169,7 @@ vec4 trace(Ray ray);
 
 bool hitShape(in Ray ray, out Hit hit);
 bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out Hit hit);
+bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax, out Hit hit);
 
 bool scatter(in Hit hit, out Scattering scattering);
 bool scatterDiffusive(in Hit hit, in Material mat, out Scattering scattering);
@@ -190,7 +219,7 @@ vec4 trace(Ray ray) {
 bool hitShape(in Ray ray, out Hit hit) {
     bool hitOccured = false;
     uint iShapeValue = 0;
-    const float minDistance = 1e-4f;
+    const float minDistance = EPSILON;
     float maxDistance = FLOAT_MAX;
 
     int nSpheres = int(shapeValues[iShapeValue++]);
@@ -198,6 +227,17 @@ bool hitShape(in Ray ray, out Hit hit) {
         Hit tempHit;
         Sphere sphere = sphereAt(iShapeValue);
         if (hitSphere(ray, sphere, minDistance, maxDistance, tempHit)) {
+            hitOccured = true;
+            maxDistance = tempHit.distance;
+            hit = tempHit;
+        }
+    }
+
+    int nTriangles = int(shapeValues[iShapeValue++]);
+    for (int iTriangle = 0; iTriangle < nTriangles; ++iTriangle) {
+        Hit tempHit;
+        Triangle triangle = triangleAt(iShapeValue);
+        if (hitTriangle(ray, triangle, minDistance, maxDistance, tempHit)) {
             hitOccured = true;
             maxDistance = tempHit.distance;
             hit = tempHit;
@@ -216,32 +256,74 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
     float discriminant = (b * b) - (a * c);
     if (discriminant < 0.f) {
         return false;
-    } else {
-        float sqrtDis = sqrt(discriminant);
-        float aInv = 1.f / a;
-
-        float root = (-b - sqrtDis) * aInv;
-        if (root < distMin || root > distMax) {
-            root = (-b + sqrtDis) * aInv;
-            if (root < distMin || root > distMax) {
-                return false;
-            }
-        }
-
-        vec3 hitPosition = pointOnRay(ray, root);
-        vec3 normal = (hitPosition - sphere.position) / sphere.radius;
-        float dotRayNorm = dot(ray.direction, normal);
-
-        hit.distance = root;
-        hit.position = hitPosition;
-        hit.normal = normal * -sign(dotRayNorm);
-        hit.incidental = ray.direction;
-        hit.texCoords = mappingOnUnitSphere(normalize(hitPosition - sphere.position));
-        hit.materialType = sphere.materialType;
-        hit.materialIndex = sphere.materialIndex;
-        hit.bFrontFace = dotRayNorm < 0.f;
-        return true;
     }
+
+    float sqrtDis = sqrt(discriminant);
+    float aInv = 1.f / a;
+    float root = (-b - sqrtDis) * aInv;
+
+    if (root < distMin || root > distMax) {
+        root = (-b + sqrtDis) * aInv;
+        if (root < distMin || root > distMax) {
+            return false;
+        }
+    }
+
+    vec3 hitPosition = pointOnRay(ray, root);
+    vec3 normal = (hitPosition - sphere.position) / sphere.radius;
+    float dotRayNorm = dot(ray.direction, normal);
+
+    hit.distance = root;
+    hit.position = hitPosition;
+    hit.normal = normal * -sign(dotRayNorm);
+    hit.incidental = ray.direction;
+    hit.texCoords = mappingOnUnitSphere(normalize(hitPosition - sphere.position));
+    hit.materialType = sphere.materialType;
+    hit.materialIndex = sphere.materialIndex;
+    hit.bFrontFace = dotRayNorm < 0.f;
+    return true;
+}
+
+// Möller-Trumbore algorithm
+bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax, out Hit hit) {
+    vec3 edge1 = triangle.b.position - triangle.a.position;
+    vec3 edge2 = triangle.c.position - triangle.a.position;
+    vec3 p = cross(ray.direction, edge2);
+    float determinant = dot(edge1, p);
+
+    if (determinant < EPSILON) {
+        return false;
+    }
+
+    float determinantInv = 1.f / determinant;
+    vec3 t = ray.position - triangle.a.position;
+    vec3 q = cross(t, edge1);
+    float u = dot(t, p) * determinantInv;
+    float v = dot(ray.direction, q) * determinantInv;
+
+    if (u < 0.f || u > 1.f || v < 0.f || u + v > 1.f) {
+        return false;
+    }
+
+    float distance = dot(q, edge2) * determinantInv;
+
+    if (distance < distMin || distance > distMax) {
+        return false;
+    }
+
+    vec3 normal = ((1.f - u - v) * triangle.a.normal) + (u * triangle.b.normal) + (v * triangle.c.normal);
+    float dotRayNorm = dot(ray.direction, normal);
+
+    hit.distance = distance;
+    hit.position = pointOnRay(ray, distance);
+    hit.incidental = ray.direction;
+    hit.normal = normal * -sign(dotRayNorm);
+    hit.texCoords = ((1.f - u - v) * triangle.a.texCoords) + (u * triangle.b.texCoords) + (v * triangle.c.texCoords);
+    hit.materialType = triangle.materialType;
+    hit.materialIndex = triangle.materialIndex;
+    hit.bFrontFace = dotRayNorm < 0.f;
+
+    return true;
 }
 
 bool scatter(in Hit hit, out Scattering scattering) {
@@ -266,7 +348,7 @@ bool scatter(in Hit hit, out Scattering scattering) {
 }
 
 bool scatterDiffusive(in Hit hit, in Material material, out Scattering scattering) {
-    vec3 scatterDirection = randDirection(dot(hit.position, hit.position));
+    vec3 scatterDirection = randDirection(dot(hit.position, gl_FragCoord.xyz));
     scatterDirection *= sign(dot(scatterDirection, hit.normal));
     scattering.newRay = Ray(hit.position, normalize(scatterDirection));
     scattering.color = sampleTexture(hit.texCoords, material.textureIndex);
@@ -276,7 +358,7 @@ bool scatterDiffusive(in Hit hit, in Material material, out Scattering scatterin
 bool scatterReflective(in Hit hit, in Material material, out Scattering scattering) {
     float fuzz = material.parameter;
     vec3 reflected = reflect(hit.incidental, hit.normal);
-    vec3 randDir = randDirection(dot(hit.position, hit.position));
+    vec3 randDir = randDirection(dot(hit.position, gl_FragCoord.xyz));
     vec3 scatterDirection = reflected + (fuzz * randDir);
     scatterDirection *= sign(dot(scatterDirection, hit.normal));
     if (dot(scatterDirection, hit.normal) > 0.f) {

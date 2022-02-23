@@ -142,15 +142,15 @@ pub fn run_app() {
     let mut prev_frame_end = Some(vulkano::sync::now(device.clone()).boxed());
 
     let mut camera = Camera {
-        position: glm::vec3(0.5, 1.0, 2.0),
+        position: glm::vec3(0.0, 0.0, 0.0),
         look_at: glm::vec3(0.0, 0.0, -1.0),
         up: glm::vec3(0.0, 1.0, 0.0),
         vertical_fov: 90.0,
         img_size: surface.window().inner_size().into(),
-        samples: 100,
+        samples: 50,
         max_reflections: 10,
     };
-    let scene = example_scenes::spheres_night();
+    let scene = example_scenes::hello_triangle();
 
     let camera_buf = {
         let camera_uniform: CameraUniform = camera.into();
