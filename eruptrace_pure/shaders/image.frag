@@ -4,7 +4,7 @@
 
 const float FLOAT_MAX = 3.402823466e+38f;
 const float FLOAT_MIN = 1.175494351e-38f;
-const float EPSILON = 1e-5;
+const float EPSILON = 1e-4f;
 const float PI = 3.1415926535897932384626433832795f;
 const float TWO_PI = 2.f * PI;
 const float HALF_PI = 0.5f * PI;
@@ -222,27 +222,22 @@ bool hitShape(in Ray ray, out Hit hit) {
     const float minDistance = EPSILON;
     float maxDistance = FLOAT_MAX;
 
-    int nSpheres = int(shapeValues[iShapeValue++]);
-    for (int iSphere = 0; iSphere < nSpheres; ++iSphere) {
-        Hit tempHit;
-        Sphere sphere = sphereAt(iShapeValue);
-        if (hitSphere(ray, sphere, minDistance, maxDistance, tempHit)) {
-            hitOccured = true;
-            maxDistance = tempHit.distance;
-            hit = tempHit;
-        }
+#define ITERATE(Primitive, primitiveAt, hitPrimitive)\
+    {\
+        int nPrimitives = int(shapeValues[iShapeValue++]);\
+        for (int iPrimitive = 0; iPrimitive < nPrimitives; ++iPrimitive) {\
+            Hit tempHit;\
+            Primitive sphere = primitiveAt(iShapeValue);\
+            if (hitPrimitive(ray, sphere, minDistance, maxDistance, tempHit)) {\
+                hitOccured = true;\
+                maxDistance = tempHit.distance;\
+                hit = tempHit;\
+            }\
+        }\
     }
-
-    int nTriangles = int(shapeValues[iShapeValue++]);
-    for (int iTriangle = 0; iTriangle < nTriangles; ++iTriangle) {
-        Hit tempHit;
-        Triangle triangle = triangleAt(iShapeValue);
-        if (hitTriangle(ray, triangle, minDistance, maxDistance, tempHit)) {
-            hitOccured = true;
-            maxDistance = tempHit.distance;
-            hit = tempHit;
-        }
-    }
+    ITERATE(Sphere, sphereAt, hitSphere);
+    ITERATE(Triangle, triangleAt, hitTriangle);
+#undef ITERATE
 
     return hitOccured;
 }
@@ -260,8 +255,8 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
 
     float sqrtDis = sqrt(discriminant);
     float aInv = 1.f / a;
-    float root = (-b - sqrtDis) * aInv;
 
+    float root = (-b - sqrtDis) * aInv;
     if (root < distMin || root > distMax) {
         root = (-b + sqrtDis) * aInv;
         if (root < distMin || root > distMax) {
@@ -277,7 +272,7 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
     hit.position = hitPosition;
     hit.normal = normal * -sign(dotRayNorm);
     hit.incidental = ray.direction;
-    hit.texCoords = mappingOnUnitSphere(normalize(hitPosition - sphere.position));
+    hit.texCoords = mappingOnUnitSphere(normal);
     hit.materialType = sphere.materialType;
     hit.materialIndex = sphere.materialIndex;
     hit.bFrontFace = dotRayNorm < 0.f;
@@ -379,11 +374,14 @@ bool scatterRefractive(in Hit hit, in Material material, out Scattering scatteri
     float reflectance = (1.f - refractiveIndex) / (1.f + refractiveIndex);
     reflectance *= reflectance;
     reflectance += (1.f - reflectance) * pow((1.f - cosTheta), 5.f);
-    bool shouldReflect = reflectance > rand(dot(hit.position, hit.incidental));
+    bool shouldReflect = reflectance > rand(dot(hit.position, gl_FragCoord.xyz));
 
-    vec3 scatterDirection = (cannotRefract || shouldReflect)
-        ? reflect(direction, hit.normal)
-        : refract(direction, hit.normal, refractiveIndex);
+    vec3 scatterDirection;
+    if (cannotRefract || shouldReflect) {
+        scatterDirection = reflect(direction, hit.normal);
+    } else {
+        scatterDirection = refract(direction, hit.normal, refractiveIndex);
+    }
 
     scattering.color = sampleTexture(hit.texCoords, material.textureIndex);
     scattering.newRay = Ray(hit.position, scatterDirection);
