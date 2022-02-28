@@ -400,6 +400,7 @@ version = "0.1.0"
 dependencies = [
  "eruptrace_pure",
  "eruptrace_scene",
+ "nalgebra-glm",
 ]
 
 [[package]]

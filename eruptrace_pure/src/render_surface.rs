@@ -1,8 +1,5 @@
-use crate::{
-    camera::CameraUniformBuffer,
-    rt_shaders,
-    scene::{MaterialsBuffer, ShapesBuffer, TexturesImage},
-};
+use crate::scene::SceneBuffers;
+use crate::{camera::CameraUniformBuffer, rt_shaders};
 use std::sync::Arc;
 use vulkano::{
     buffer::{BufferUsage, ImmutableBuffer, TypedBufferAccess},
@@ -30,6 +27,7 @@ struct RenderSurfaceVertex {
 
 vulkano::impl_vertex!(RenderSurfaceVertex, position);
 
+#[derive(Clone)]
 pub struct RenderSurface {
     vertex_buffer: Arc<ImmutableBuffer<[RenderSurfaceVertex]>>,
     pipeline: Arc<GraphicsPipeline>,
@@ -42,10 +40,8 @@ impl RenderSurface {
     pub fn new(
         queue: Arc<Queue>,
         render_pass: Arc<RenderPass>,
-        camera_buf: CameraUniformBuffer,
-        shapes_buf: ShapesBuffer,
-        materials_buf: MaterialsBuffer,
-        textures_img: TexturesImage,
+        camera_buffer: CameraUniformBuffer,
+        scene_buffers: SceneBuffers,
     ) -> (Self, RenderSurfaceVbFuture) {
         let vertices = [
             RenderSurfaceVertex {
@@ -98,7 +94,7 @@ impl RenderSurface {
         };
 
         let uniform_descriptor_set = {
-            let textures_img_view = ImageView::start(textures_img)
+            let textures_image_view = ImageView::start(scene_buffers.textures_image)
                 .ty(ImageViewType::Dim2dArray)
                 .build()
                 .expect("Cannot create textures image.");
@@ -115,10 +111,16 @@ impl RenderSurface {
             PersistentDescriptorSet::new(
                 layout.clone(),
                 [
-                    WriteDescriptorSet::buffer(0, camera_buf),
-                    WriteDescriptorSet::buffer(1, shapes_buf),
-                    WriteDescriptorSet::buffer(2, materials_buf),
-                    WriteDescriptorSet::image_view_sampler(3, textures_img_view, textures_sampler),
+                    WriteDescriptorSet::image_view_sampler(
+                        0,
+                        textures_image_view,
+                        textures_sampler,
+                    ),
+                    WriteDescriptorSet::buffer(1, camera_buffer),
+                    WriteDescriptorSet::buffer(2, scene_buffers.materials_buffer),
+                    WriteDescriptorSet::buffer(3, scene_buffers.shapes_buffer),
+                    WriteDescriptorSet::buffer(4, scene_buffers.mesh_metas_buffer),
+                    WriteDescriptorSet::buffer(5, scene_buffers.mesh_data_buffer),
                 ],
             )
             .expect("Cannot create descriptor set.")

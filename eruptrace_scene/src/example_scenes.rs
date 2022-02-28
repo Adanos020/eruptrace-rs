@@ -1,4 +1,4 @@
-use crate::{materials::*, primitives::*, Scene};
+use crate::{materials::*, shapes::*, Scene};
 use nalgebra_glm as glm;
 
 pub fn spheres_day() -> Scene {
@@ -35,7 +35,7 @@ pub fn spheres_day() -> Scene {
                 material_index: 4,
             },
         ],
-        triangles: vec![],
+        meshes: vec![],
         materials: vec![
             Material {
                 // Ground
@@ -112,7 +112,7 @@ pub fn spheres_night() -> Scene {
                 material_index: 4,
             },
         ],
-        triangles: vec![],
+        meshes: vec![],
         materials: vec![
             Material {
                 // Ground
@@ -155,40 +155,104 @@ pub fn spheres_night() -> Scene {
     }
 }
 
-pub fn cubes() -> Scene {
+pub fn cube() -> Scene {
     Scene {
         spheres: vec![],
-        triangles: vec![
+        meshes: vec![
             // Ground
-            Triangle {
-                vertices: [
-                    PolygonVertex {
-                        position: glm::vec3(-0.5, 0.0, -1.0),
-                        normal: glm::vec3(0.0, 1.0, 0.0),
-                        texture_coordinate: glm::vec2(0.0, 1.0),
-                    },
-                    PolygonVertex {
-                        position: glm::vec3(0.5, 0.0, -1.0),
-                        normal: glm::vec3(0.0, 1.0, 0.0),
-                        texture_coordinate: glm::vec2(1.0, 1.0),
-                    },
-                    PolygonVertex {
-                        position: glm::vec3(0.0, 0.0, -1.0),
-                        normal: glm::vec3(0.0, 1.0, 0.0),
-                        texture_coordinate: glm::vec2(0.5, 0.0),
-                    },
+            Mesh {
+                positions: vec![
+                    glm::vec3(-10.0, 0.0, -10.0),
+                    glm::vec3(10.0, 0.0, -10.0),
+                    glm::vec3(10.0, 0.0, 10.0),
+                    glm::vec3(-10.0, 0.0, 10.0),
+                ],
+                normals: [glm::vec3(0.0, 1.0, 0.0); 4].to_vec(),
+                texcoords: vec![
+                    glm::vec2(-10.0, -10.0),
+                    glm::vec2(10.0, -10.0),
+                    glm::vec2(10.0, 10.0),
+                    glm::vec2(-10.0, 10.0),
+                ],
+                indices: vec![0, 1, 2, 0, 2, 3],
+                material_index: 0,
+            },
+            // Cube
+            Mesh {
+                positions: vec![
+                    // Left
+                    glm::vec3(-1.0, -1.0, -1.0),
+                    glm::vec3(-1.0, 1.0, -1.0),
+                    glm::vec3(-1.0, 1.0, 1.0),
+                    glm::vec3(-1.0, -1.0, 1.0),
+                    // Right
+                    glm::vec3(1.0, -1.0, -1.0),
+                    glm::vec3(1.0, 1.0, -1.0),
+                    glm::vec3(1.0, 1.0, 1.0),
+                    glm::vec3(1.0, -1.0, 1.0),
+                    // Bottom
+                    glm::vec3(-1.0, -1.0, -1.0),
+                    glm::vec3(1.0, -1.0, -1.0),
+                    glm::vec3(1.0, -1.0, 1.0),
+                    glm::vec3(-1.0, -1.0, 1.0),
+                    // Top
+                    glm::vec3(-1.0, 1.0, -1.0),
+                    glm::vec3(1.0, 1.0, -1.0),
+                    glm::vec3(1.0, 1.0, 1.0),
+                    glm::vec3(-1.0, 1.0, 1.0),
+                    // Back
+                    glm::vec3(-1.0, -1.0, -1.0),
+                    glm::vec3(1.0, -1.0, -1.0),
+                    glm::vec3(1.0, 1.0, -1.0),
+                    glm::vec3(-1.0, 1.0, -1.0),
+                    // Front
+                    glm::vec3(-1.0, -1.0, 1.0),
+                    glm::vec3(1.0, -1.0, 1.0),
+                    glm::vec3(1.0, 1.0, 1.0),
+                    glm::vec3(-1.0, 1.0, 1.0),
+                ],
+                normals: [
+                    [glm::vec3(-1.0, 0.0, 0.0); 4],
+                    [glm::vec3(1.0, 0.0, 0.0); 4],
+                    [glm::vec3(0.0, -1.0, 0.0); 4],
+                    [glm::vec3(0.0, 1.0, 0.0); 4],
+                    [glm::vec3(0.0, 0.0, -1.0); 4],
+                    [glm::vec3(0.0, 0.0, 1.0); 4],
+                ]
+                .into_iter()
+                .flatten()
+                .collect(),
+                texcoords: [glm::vec2(0.0, 0.0); 24].to_vec(),
+                indices: vec![
+                    // Left
+                    0, 1, 2, 0, 2, 3, // Right
+                    4, 5, 6, 4, 6, 7, // Bottom
+                    8, 9, 10, 8, 10, 11, // Top
+                    12, 13, 14, 12, 14, 15, // Back
+                    16, 17, 18, 16, 18, 19, // Front
+                    20, 21, 22, 20, 22, 23,
                 ],
                 material_index: 0,
-            }
+            },
         ],
-        materials: vec![Material {
-            material_type: MaterialType::Diffusive,
-            texture_index: 1,
-            parameter: 1.0,
-        }],
+        materials: vec![
+            // Ground
+            Material {
+                material_type: MaterialType::Diffusive,
+                texture_index: 1,
+                parameter: 1.0,
+            },
+            // Cube
+            Material {
+                material_type: MaterialType::Diffusive,
+                texture_index: 2,
+                parameter: 1.0,
+            },
+        ],
         texture_paths: vec![
             "textures/sky.png".to_string(),
             "textures/sun.png".to_string(),
+            "textures/white.png".to_string(),
         ],
     }
 }

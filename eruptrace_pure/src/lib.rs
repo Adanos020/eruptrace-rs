@@ -7,8 +7,7 @@ use crate::{
     camera::CameraUniform, render_surface::RenderSurface, scene::make_scene_buffers,
     shaders::rt_shaders,
 };
-use eruptrace_scene::{camera::Camera, example_scenes};
-use nalgebra_glm as glm;
+use eruptrace_scene::{camera::Camera, Scene};
 use std::sync::Arc;
 use vulkano::{
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, SubpassContents},
@@ -28,7 +27,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-pub fn run_app() {
+pub fn run_app(mut camera: Camera, scene: Scene) {
     let instance = {
         let extensions = vulkano_win::required_extensions();
         Instance::new(None, Version::V1_3, &extensions, None)
@@ -137,44 +136,35 @@ pub fn run_app() {
 
     let mut framebuffers =
         update_viewport_and_create_framebuffers(&swapchain_images, &render_pass, &mut viewport);
-
     let mut recreate_swapchain = false;
     let mut prev_frame_end = Some(vulkano::sync::now(device.clone()).boxed());
-
-    let mut camera = Camera {
-        position: glm::vec3(1.0, 1.0, 1.0),
-        look_at: glm::vec3(0.0, 0.0, -1.0),
-        up: glm::vec3(0.0, 1.0, 0.0),
-        vertical_fov: 90.0,
-        img_size: surface.window().inner_size().into(),
-        samples: 50,
-        max_reflections: 10,
-    };
-    let scene = example_scenes::spheres_night();
 
     let camera_buf = {
         let camera_uniform: CameraUniform = camera.into();
         camera_uniform.to_buffer(device.clone())
     };
     let (
-        (shapes_buffer, shapes_future),
-        (materials_buffer, materials_future),
-        (textures_image, textures_future),
+        scene_buffers,
+        textures_future,
+        materials_future,
+        shapes_future,
+        mesh_metas_future,
+        mesh_data_future,
     ) = make_scene_buffers(queues[0].clone(), scene);
 
     let (render_surface, render_surface_vb_future) = RenderSurface::new(
         queues[0].clone(),
         render_pass.clone(),
         camera_buf.clone(),
-        shapes_buffer,
-        materials_buffer,
-        textures_image,
+        scene_buffers,
     );
 
     vulkano::sync::now(device.clone())
-        .join(shapes_future)
-        .join(materials_future)
         .join(textures_future)
+        .join(materials_future)
+        .join(shapes_future)
+        .join(mesh_metas_future)
+        .join(mesh_data_future)
         .join(render_surface_vb_future)
         .then_signal_fence_and_flush()
         .expect("Cannot flush.")

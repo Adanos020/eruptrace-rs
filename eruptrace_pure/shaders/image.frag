@@ -50,6 +50,14 @@ struct Triangle {
     uint materialIndex;
 };
 
+struct MeshMeta {
+    uint materialIndex;
+    uint positionsStart;
+    uint normalsStart;
+    uint texCoordsStart;
+    uint indicesStart;
+};
+
 struct Material {
     uint materialType;
     uint textureIndex;
@@ -80,16 +88,22 @@ struct Scattering {
 
 layout(location = 0) out vec4 fragColour;
 
-layout(set = 0, binding = 0) uniform CameraUniform {
+layout(set = 0, binding = 0) uniform sampler2DArray textures;
+layout(set = 0, binding = 1) uniform CameraUniform {
     Camera camera;
-};
-layout(set = 0, binding = 1) readonly buffer ShapesData {
-    float shapeValues[];
 };
 layout(set = 0, binding = 2, std140) readonly buffer MaterialData {
     Material materials[];
 };
-layout(set = 0, binding = 3) uniform sampler2DArray textures;
+layout(set = 0, binding = 3) readonly buffer ShapesData {
+    float shapeValues[];
+};
+layout(set = 0, binding = 4, std140) readonly buffer MeshMetasData {
+    MeshMeta meshMetas[];
+};
+layout(set = 0, binding = 5) readonly buffer MeshesData {
+    float meshValues[];
+};
 
 // Utils ---------------------------------------------------------------------------------------------------------------
 
@@ -139,24 +153,6 @@ Sphere sphereAt(inout uint iShapeValue) {
     s.radius        = shapeValues[iShapeValue++];
     s.materialIndex = uint(shapeValues[iShapeValue++]);
     return s;
-}
-
-Triangle triangleAt(inout uint iShapeValue) {
-    Triangle t;
-    t.a.position  = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
-    t.a.normal    = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
-    t.a.texCoords = vec2(shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
-
-    t.b.position  = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
-    t.b.normal    = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
-    t.b.texCoords = vec2(shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
-
-    t.c.position  = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
-    t.c.normal    = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
-    t.c.texCoords = vec2(shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
-
-    t.materialIndex = uint(shapeValues[iShapeValue++]);
-    return t;
 }
 
 // Ray tracing ---------------------------------------------------------------------------------------------------------
@@ -218,22 +214,20 @@ bool hitShape(in Ray ray, out Hit hit) {
     const float minDistance = EPSILON;
     float maxDistance = FLOAT_MAX;
 
-#define ITERATE(Primitive, primitiveAt, hitPrimitive)\
-    {\
-        int nPrimitives = int(shapeValues[iShapeValue++]);\
-        for (int iPrimitive = 0; iPrimitive < nPrimitives; ++iPrimitive) {\
-            Hit tempHit;\
-            Primitive sphere = primitiveAt(iShapeValue);\
-            if (hitPrimitive(ray, sphere, minDistance, maxDistance, tempHit)) {\
-                hitOccured = true;\
-                maxDistance = tempHit.distance;\
-                hit = tempHit;\
-            }\
-        }\
+    int nSpheres = int(shapeValues[iShapeValue++]);
+    for (int iSphere = 0; iSphere < nSpheres; ++iSphere) {
+        Hit tempHit;
+        Sphere sphere = sphereAt(iShapeValue);
+        if (hitSphere(ray, sphere, minDistance, maxDistance, tempHit)) {
+            hitOccured = true;
+            maxDistance = tempHit.distance;
+            hit = tempHit;
+        }
     }
-    ITERATE(Sphere, sphereAt, hitSphere);
-    ITERATE(Triangle, triangleAt, hitTriangle);
-#undef ITERATE
+
+    // TODO: delete
+    MeshMeta m = meshMetas[0];
+    float f = meshValues[0];
 
     return hitOccured;
 }
