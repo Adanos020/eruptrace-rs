@@ -104,7 +104,7 @@ impl RenderSurface {
                 .expect("Cannot create textures image.");
             let textures_sampler = Sampler::start(queue.device().clone())
                 .filter(Filter::Linear)
-                .address_mode(SamplerAddressMode::ClampToEdge)
+                .address_mode(SamplerAddressMode::Repeat)
                 .build()
                 .expect("Cannot build sampler for textures.");
             let layout = pipeline

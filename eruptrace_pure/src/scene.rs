@@ -20,6 +20,7 @@ use vulkano::{
 #[repr_std140]
 #[derive(Copy, Clone, Debug)]
 pub struct MaterialStd140 {
+    pub material_type: uint,
     pub texture_index: uint,
     pub parameter: float,
 }
@@ -91,7 +92,6 @@ fn get_shapes_data(spheres: Vec<Sphere>, triangles: Vec<Triangle>) -> Vec<f32> {
         data.push(sphere.position.y);
         data.push(sphere.position.z);
         data.push(sphere.radius as f32);
-        data.push(sphere.material_type as u32 as f32);
         data.push(sphere.material_index as f32);
     }
 
@@ -107,7 +107,6 @@ fn get_shapes_data(spheres: Vec<Sphere>, triangles: Vec<Triangle>) -> Vec<f32> {
             data.push(vertex.texture_coordinate.x);
             data.push(vertex.texture_coordinate.y);
         }
-        data.push(triangle.material_type as u32 as f32);
         data.push(triangle.material_index as f32);
     }
 
@@ -116,6 +115,7 @@ fn get_shapes_data(spheres: Vec<Sphere>, triangles: Vec<Triangle>) -> Vec<f32> {
 
 fn get_material_data(materials: Vec<Material>) -> Vec<MaterialStd140> {
     let to_std140 = |mat: Material| MaterialStd140 {
+        material_type: uint(mat.material_type as u32),
         texture_index: uint(mat.texture_index),
         parameter: float(mat.parameter),
     };

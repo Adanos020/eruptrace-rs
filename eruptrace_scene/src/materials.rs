@@ -9,8 +9,8 @@ pub enum MaterialType {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Material {
+    pub material_type: MaterialType,
     pub texture_index: u32,
-
     /// The role of this parameter depends on the material type:
     /// - Diffusive: no function
     /// - Reflective: fuzz

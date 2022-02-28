@@ -40,7 +40,6 @@ struct Vertex {
 struct Sphere {
     vec3 position;
     float radius;
-    uint materialType;
     uint materialIndex;
 };
 
@@ -48,11 +47,11 @@ struct Triangle {
     Vertex a;
     Vertex b;
     Vertex c;
-    uint materialType;
     uint materialIndex;
 };
 
 struct Material {
+    uint materialType;
     uint textureIndex;
     float parameter;
 };
@@ -68,7 +67,6 @@ struct Hit {
     vec3 normal;
     vec2 texCoords;
     float distance;
-    uint materialType;
     uint materialIndex;
     bool bFrontFace;
 };
@@ -139,7 +137,6 @@ Sphere sphereAt(inout uint iShapeValue) {
     Sphere s;
     s.position      = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
     s.radius        = shapeValues[iShapeValue++];
-    s.materialType  = uint(shapeValues[iShapeValue++]);
     s.materialIndex = uint(shapeValues[iShapeValue++]);
     return s;
 }
@@ -158,7 +155,6 @@ Triangle triangleAt(inout uint iShapeValue) {
     t.c.normal    = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
     t.c.texCoords = vec2(shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
 
-    t.materialType  = uint(shapeValues[iShapeValue++]);
     t.materialIndex = uint(shapeValues[iShapeValue++]);
     return t;
 }
@@ -273,7 +269,6 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
     hit.normal = normal * -sign(dotRayNorm);
     hit.incidental = ray.direction;
     hit.texCoords = mappingOnUnitSphere(normal);
-    hit.materialType = sphere.materialType;
     hit.materialIndex = sphere.materialIndex;
     hit.bFrontFace = dotRayNorm < 0.f;
     return true;
@@ -314,7 +309,6 @@ bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax,
     hit.incidental = ray.direction;
     hit.normal = normal * -sign(dotRayNorm);
     hit.texCoords = ((1.f - u - v) * triangle.a.texCoords) + (u * triangle.b.texCoords) + (v * triangle.c.texCoords);
-    hit.materialType = triangle.materialType;
     hit.materialIndex = triangle.materialIndex;
     hit.bFrontFace = dotRayNorm < 0.f;
 
@@ -323,7 +317,7 @@ bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax,
 
 bool scatter(in Hit hit, out Scattering scattering) {
     Material material = materials[hit.materialIndex];
-    switch (hit.materialType) {
+    switch (material.materialType) {
         case MATERIAL_DIFFUSIVE: {
             return scatterDiffusive(hit, material, scattering);
         }
