@@ -162,17 +162,17 @@ pub fn cube() -> Scene {
             // Ground
             Mesh {
                 positions: vec![
-                    glm::vec3(-10.0, 0.0, -10.0),
-                    glm::vec3(10.0, 0.0, -10.0),
-                    glm::vec3(10.0, 0.0, 10.0),
                     glm::vec3(-10.0, 0.0, 10.0),
+                    glm::vec3(10.0, 0.0, 10.0),
+                    glm::vec3(10.0, 0.0, -10.0),
+                    glm::vec3(-10.0, 0.0, -10.0),
                 ],
                 normals: [glm::vec3(0.0, 1.0, 0.0); 4].to_vec(),
                 texcoords: vec![
-                    glm::vec2(-10.0, -10.0),
-                    glm::vec2(10.0, -10.0),
+                    glm::vec2(0.0, 10.0),
                     glm::vec2(10.0, 10.0),
-                    glm::vec2(-10.0, 10.0),
+                    glm::vec2(10.0, 0.0),
+                    glm::vec2(0.0, 0.0),
                 ],
                 indices: vec![0, 1, 2, 0, 2, 3],
                 material_index: 0,
@@ -181,35 +181,35 @@ pub fn cube() -> Scene {
             Mesh {
                 positions: vec![
                     // Left
-                    glm::vec3(-1.0, -1.0, -1.0),
-                    glm::vec3(-1.0, 1.0, -1.0),
-                    glm::vec3(-1.0, 1.0, 1.0),
-                    glm::vec3(-1.0, -1.0, 1.0),
+                    glm::vec3(0.0, 0.0, 0.0),
+                    glm::vec3(0.0, 1.0, 0.0),
+                    glm::vec3(0.0, 1.0, 1.0),
+                    glm::vec3(0.0, 0.0, 1.0),
                     // Right
-                    glm::vec3(1.0, -1.0, -1.0),
-                    glm::vec3(1.0, 1.0, -1.0),
+                    glm::vec3(1.0, 0.0, 0.0),
+                    glm::vec3(1.0, 1.0, 0.0),
                     glm::vec3(1.0, 1.0, 1.0),
-                    glm::vec3(1.0, -1.0, 1.0),
+                    glm::vec3(1.0, 0.0, 1.0),
                     // Bottom
-                    glm::vec3(-1.0, -1.0, -1.0),
-                    glm::vec3(1.0, -1.0, -1.0),
-                    glm::vec3(1.0, -1.0, 1.0),
-                    glm::vec3(-1.0, -1.0, 1.0),
+                    glm::vec3(0.0, 0.0, 1.0),
+                    glm::vec3(1.0, 0.0, 1.0),
+                    glm::vec3(1.0, 0.0, 0.0),
+                    glm::vec3(0.0, 0.0, 0.0),
                     // Top
-                    glm::vec3(-1.0, 1.0, -1.0),
-                    glm::vec3(1.0, 1.0, -1.0),
+                    glm::vec3(0.0, 1.0, 1.0),
                     glm::vec3(1.0, 1.0, 1.0),
-                    glm::vec3(-1.0, 1.0, 1.0),
+                    glm::vec3(1.0, 1.0, 0.0),
+                    glm::vec3(0.0, 1.0, 0.0),
                     // Back
-                    glm::vec3(-1.0, -1.0, -1.0),
-                    glm::vec3(1.0, -1.0, -1.0),
-                    glm::vec3(1.0, 1.0, -1.0),
-                    glm::vec3(-1.0, 1.0, -1.0),
+                    glm::vec3(0.0, 0.0, 0.0),
+                    glm::vec3(1.0, 0.0, 0.0),
+                    glm::vec3(1.0, 1.0, 0.0),
+                    glm::vec3(0.0, 1.0, 0.0),
                     // Front
-                    glm::vec3(-1.0, -1.0, 1.0),
-                    glm::vec3(1.0, -1.0, 1.0),
+                    glm::vec3(0.0, 0.0, 1.0),
+                    glm::vec3(1.0, 0.0, 1.0),
                     glm::vec3(1.0, 1.0, 1.0),
-                    glm::vec3(-1.0, 1.0, 1.0),
+                    glm::vec3(0.0, 1.0, 1.0),
                 ],
                 normals: [
                     [glm::vec3(-1.0, 0.0, 0.0); 4],
@@ -222,17 +222,24 @@ pub fn cube() -> Scene {
                 .into_iter()
                 .flatten()
                 .collect(),
-                texcoords: [glm::vec2(0.0, 0.0); 24].to_vec(),
+                texcoords: [[
+                    glm::vec2(0.0, 1.0),
+                    glm::vec2(1.0, 1.0),
+                    glm::vec2(1.0, 0.0),
+                    glm::vec2(0.0, 0.0),
+                ]; 6]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
                 indices: vec![
-                    // Left
-                    0, 1, 2, 0, 2, 3, // Right
-                    4, 5, 6, 4, 6, 7, // Bottom
-                    8, 9, 10, 8, 10, 11, // Top
-                    12, 13, 14, 12, 14, 15, // Back
-                    16, 17, 18, 16, 18, 19, // Front
-                    20, 21, 22, 20, 22, 23,
+                    0, 1, 3, 1, 2, 3, // Left
+                    4, 5, 7, 5, 6, 7, // Right
+                    8, 9, 11, 9, 10, 11, // Bottom
+                    12, 13, 15, 13, 14, 15, // Top
+                    16, 17, 19, 17, 18, 19, // Back
+                    20, 21, 23, 21, 22, 23, // Front
                 ],
-                material_index: 0,
+                material_index: 1,
             },
         ],
         materials: vec![
@@ -251,8 +258,8 @@ pub fn cube() -> Scene {
         ],
         texture_paths: vec![
             "textures/sky.png".to_string(),
-            "textures/sun.png".to_string(),
-            "textures/white.png".to_string(),
+            "textures/grass.png".to_string(),
+            "textures/bricks.png".to_string(),
         ],
     }
 }

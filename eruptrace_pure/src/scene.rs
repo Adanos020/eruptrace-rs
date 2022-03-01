@@ -42,6 +42,7 @@ pub struct MeshMetaStd140 {
     pub normals_start: uint,
     pub texcoords_start: uint,
     pub indices_start: uint,
+    pub mesh_end: uint,
 }
 
 pub type BufferFuture = CommandBufferExecFuture<NowFuture, PrimaryAutoCommandBuffer>;
@@ -152,7 +153,7 @@ fn get_shapes_data(spheres: Vec<Sphere>) -> Vec<f32> {
 fn get_mesh_data(meshes: Vec<Mesh>) -> (Vec<MeshMetaStd140>, Vec<f32>) {
     let mut metas = Vec::with_capacity(meshes.len());
     let mut data = Vec::with_capacity(meshes.iter().map(|m| m.size_in_f32s()).sum());
-    let mut curr_mesh_start = 0usize;
+    let mut curr_mesh_start = 1u32;
 
     // Number of meshes
     data.push(meshes.len() as f32);
@@ -163,10 +164,11 @@ fn get_mesh_data(meshes: Vec<Mesh>) -> (Vec<MeshMetaStd140>, Vec<f32>) {
         let indices_size = mesh.indices.len();
 
         let material_index = uint(mesh.material_index);
-        let positions_start = uint(curr_mesh_start as u32);
+        let positions_start = uint(curr_mesh_start);
         let normals_start = uint(positions_start.0 + positions_size as u32);
         let texcoords_start = uint(normals_start.0 + normals_size as u32);
         let indices_start = uint(texcoords_start.0 + texcoords_size as u32);
+        let mesh_end = uint(indices_start.0 + indices_size as u32);
 
         metas.push(MeshMetaStd140 {
             material_index,
@@ -174,6 +176,7 @@ fn get_mesh_data(meshes: Vec<Mesh>) -> (Vec<MeshMetaStd140>, Vec<f32>) {
             normals_start,
             texcoords_start,
             indices_start,
+            mesh_end,
         });
 
         for position in mesh.positions.into_iter() {
@@ -194,7 +197,7 @@ fn get_mesh_data(meshes: Vec<Mesh>) -> (Vec<MeshMetaStd140>, Vec<f32>) {
             data.push(index as f32);
         }
 
-        curr_mesh_start = indices_start.0 as usize + indices_size;
+        curr_mesh_start = mesh_end.0;
     }
 
     (metas, data)

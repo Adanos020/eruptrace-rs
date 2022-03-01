@@ -47,7 +47,6 @@ struct Triangle {
     Vertex a;
     Vertex b;
     Vertex c;
-    uint materialIndex;
 };
 
 struct MeshMeta {
@@ -56,6 +55,7 @@ struct MeshMeta {
     uint normalsStart;
     uint texCoordsStart;
     uint indicesStart;
+    uint meshEnd;
 };
 
 struct Material {
@@ -162,6 +162,7 @@ vec4 trace(Ray ray);
 bool hitShape(in Ray ray, out Hit hit);
 bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out Hit hit);
 bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax, out Hit hit);
+bool hitMesh(in Ray ray, in MeshMeta meshMeta, float distMin, float distMax, out Hit hit);
 
 bool scatter(in Hit hit, out Scattering scattering);
 bool scatterDiffusive(in Hit hit, in Material mat, out Scattering scattering);
@@ -215,7 +216,7 @@ bool hitShape(in Ray ray, out Hit hit) {
     float maxDistance = FLOAT_MAX;
 
     int nSpheres = int(shapeValues[iShapeValue++]);
-    for (int iSphere = 0; iSphere < nSpheres; ++iSphere) {
+    for (int i = 0; i < nSpheres; ++i) {
         Hit tempHit;
         Sphere sphere = sphereAt(iShapeValue);
         if (hitSphere(ray, sphere, minDistance, maxDistance, tempHit)) {
@@ -225,9 +226,16 @@ bool hitShape(in Ray ray, out Hit hit) {
         }
     }
 
-    // TODO: delete
-    MeshMeta m = meshMetas[0];
-    float f = meshValues[0];
+    int nMeshes = int(meshValues[0]);
+    for (int i = 0; i < nMeshes; ++i) {
+        Hit tempHit;
+        MeshMeta meshMeta = meshMetas[i];
+        if (hitMesh(ray, meshMeta, minDistance, maxDistance, tempHit)) {
+            hitOccured = true;
+            maxDistance = tempHit.distance;
+            hit = tempHit;
+        }
+    }
 
     return hitOccured;
 }
@@ -268,6 +276,47 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
     return true;
 }
 
+bool hitMesh(in Ray ray, in MeshMeta meshMeta, float distMin, float distMax, out Hit hit) {
+    bool bHitOccurred = false;
+    for (uint i = meshMeta.indicesStart; i < meshMeta.meshEnd; i += 3) {
+        // Grab indices
+        uint ai = uint(meshValues[i + 0]);
+        uint bi = uint(meshValues[i + 1]);
+        uint ci = uint(meshValues[i + 2]);
+        uint api = (ai * 3) + meshMeta.positionsStart;
+        uint bpi = (bi * 3) + meshMeta.positionsStart;
+        uint cpi = (ci * 3) + meshMeta.positionsStart;
+        uint ani = (ai * 3) + meshMeta.normalsStart;
+        uint bni = (bi * 3) + meshMeta.normalsStart;
+        uint cni = (ci * 3) + meshMeta.normalsStart;
+        uint ati = (ai * 2) + meshMeta.texCoordsStart;
+        uint bti = (bi * 2) + meshMeta.texCoordsStart;
+        uint cti = (ci * 2) + meshMeta.texCoordsStart;
+        // Grab vectors
+        vec3 ap = vec3(meshValues[api + 0], meshValues[api + 1], meshValues[api + 2]);
+        vec3 bp = vec3(meshValues[bpi + 0], meshValues[bpi + 1], meshValues[bpi + 2]);
+        vec3 cp = vec3(meshValues[cpi + 0], meshValues[cpi + 1], meshValues[cpi + 2]);
+        vec3 an = vec3(meshValues[ani + 0], meshValues[ani + 1], meshValues[ani + 2]);
+        vec3 bn = vec3(meshValues[bni + 0], meshValues[bni + 1], meshValues[bni + 2]);
+        vec3 cn = vec3(meshValues[cni + 0], meshValues[cni + 1], meshValues[cni + 2]);
+        vec2 at = vec2(meshValues[ati + 0], meshValues[ati + 1]);
+        vec2 bt = vec2(meshValues[bti + 0], meshValues[bti + 1]);
+        vec2 ct = vec2(meshValues[cti + 0], meshValues[cti + 1]);
+        // Construct triangle
+        Vertex a = Vertex(ap, an, at);
+        Vertex b = Vertex(bp, bn, bt);
+        Vertex c = Vertex(cp, cn, ct);
+        Triangle triangle = Triangle(a, b, c);
+
+        if (hitTriangle(ray, triangle, distMin, distMax, hit)) {
+            hit.materialIndex = meshMeta.materialIndex;
+            distMax = hit.distance;
+            bHitOccurred = true;
+        }
+    }
+    return bHitOccurred;
+}
+
 // Möller-Trumbore algorithm
 bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax, out Hit hit) {
     vec3 edge1 = triangle.b.position - triangle.a.position;
@@ -303,7 +352,6 @@ bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax,
     hit.incidental = ray.direction;
     hit.normal = normal * -sign(dotRayNorm);
     hit.texCoords = ((1.f - u - v) * triangle.a.texCoords) + (u * triangle.b.texCoords) + (v * triangle.c.texCoords);
-    hit.materialIndex = triangle.materialIndex;
     hit.bFrontFace = dotRayNorm < 0.f;
 
     return true;

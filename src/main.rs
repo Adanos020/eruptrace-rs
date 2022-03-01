@@ -4,8 +4,8 @@ use nalgebra_glm as glm;
 
 fn main() {
     let camera = Camera {
-        position: glm::vec3(1.0, 1.0, 1.0),
-        look_at: glm::vec3(0.0, 0.0, -1.0),
+        position: glm::vec3(1.5, 1.5, 1.5),
+        look_at: glm::vec3(0.5, 0.5, 0.5),
         up: glm::vec3(0.0, 1.0, 0.0),
         vertical_fov: 90.0,
         img_size: [0, 0],
