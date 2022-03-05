@@ -18,3 +18,4 @@ eruptrace_pure = { path = "eruptrace_pure" }
 eruptrace_scene = { path = "eruptrace_scene" }
 
 nalgebra-glm = "0.16"
+pico-args = "0.4"

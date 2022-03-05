@@ -67,6 +67,7 @@ impl Mesh {
             .as_array()
             .unwrap()
             .iter()
+            .filter(|p| p.is_u64())
             .map(|p| p.as_u64().unwrap_or(0) as u32)
             .collect();
 
