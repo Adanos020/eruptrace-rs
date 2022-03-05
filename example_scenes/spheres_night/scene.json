@@ -1,0 +1,61 @@
+{
+  "spheres": [
+    {
+      "position": [0.0, -200.5, -1.0],
+      "radius": 200.0,
+      "material": "jupiter"
+    },
+    {
+      "position": [0.0, 1.5, -6.5],
+      "radius": 2.0,
+      "material": "sun"
+    },
+    {
+      "position": [0.0, 0.0, -1.0],
+      "radius": 0.5,
+      "material": "earth"
+    },
+    {
+      "position": [-1.0, 0.0, -1.0],
+      "radius": 0.5,
+      "material": "metal"
+    },
+    {
+      "position": [1.0, 0.0, -1.0],
+      "radius": 0.5,
+      "material": "glass"
+    }
+  ],
+  "materials": {
+    "jupiter": {
+      "type": "diffusive",
+      "texture": "jupiter"
+    },
+    "earth": {
+      "type": "diffusive",
+      "texture": "earth"
+    },
+    "sun": {
+      "type": "emitting",
+      "texture": "sun",
+      "intensity": 5.0
+    },
+    "metal": {
+      "type": "reflective",
+      "texture": "gray",
+      "fuzz": 0.1
+    },
+    "glass": {
+      "type": "refractive",
+      "texture": "gray",
+      "index": 1.5
+    }
+  },
+  "textures": {
+    "sky": "sky_night.png",
+    "gray": "gray.png",
+    "earth": "earth.png",
+    "jupiter": "jupiter.png",
+    "sun": "sun.png"
+  }
+}

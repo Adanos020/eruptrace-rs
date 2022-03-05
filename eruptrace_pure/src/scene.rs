@@ -6,6 +6,7 @@ use eruptrace_scene::{
     Scene,
 };
 use image::EncodableLayout;
+use std::path::PathBuf;
 use std::{mem::size_of, sync::Arc};
 use std140::*;
 use vulkano::{
@@ -118,9 +119,9 @@ pub fn make_scene_buffers(
     )
 }
 
-fn get_texture_data(texture_paths: Vec<String>) -> Vec<u8> {
+fn get_texture_data(texture_paths: Vec<PathBuf>) -> Vec<u8> {
     texture_paths
-        .iter()
+        .into_iter()
         .map(|path| image::open(path).unwrap().into_rgba8())
         .flat_map(|texture| Vec::from(texture.as_bytes()))
         .collect()

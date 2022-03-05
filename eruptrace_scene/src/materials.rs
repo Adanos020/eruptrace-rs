@@ -1,3 +1,5 @@
+use serde_json as json;
+
 #[repr(u32)]
 #[derive(Copy, Clone, Debug)]
 pub enum MaterialType {
@@ -17,4 +19,40 @@ pub struct Material {
     /// - Refractive: refractive index
     /// - Emitting: intensity
     pub parameter: f32,
+}
+
+impl From<&str> for MaterialType {
+    fn from(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "diffusive" => Self::Diffusive,
+            "reflective" => Self::Reflective,
+            "refractive" => Self::Refractive,
+            "emitting" => Self::Emitting,
+            _ => panic!("Invalid material type '{s}'."),
+        }
+    }
+}
+
+impl Material {
+    pub fn from_json(object: &json::Value, texture_names: &[String]) -> anyhow::Result<Self> {
+        let material_type = MaterialType::from(object["type"].as_str().unwrap_or_default());
+
+        let texture_index = texture_names
+            .iter()
+            .position(|n| object["texture"] == *n)
+            .unwrap_or_default() as u32;
+
+        let parameter = match material_type {
+            MaterialType::Diffusive => 1.0,
+            MaterialType::Reflective => object["fuzz"].as_f64().unwrap_or(0.0) as f32,
+            MaterialType::Refractive => object["index"].as_f64().unwrap_or(1.0) as f32,
+            MaterialType::Emitting => object["intensity"].as_f64().unwrap_or(1.0) as f32,
+        };
+
+        Ok(Material {
+            material_type,
+            texture_index,
+            parameter,
+        })
+    }
 }

@@ -1,5 +1,5 @@
 use eruptrace_pure::run_app;
-use eruptrace_scene::{camera::Camera, example_scenes};
+use eruptrace_scene::{camera::Camera, Scene};
 use nalgebra_glm as glm;
 
 fn main() {
@@ -12,6 +12,6 @@ fn main() {
         samples: 50,
         max_reflections: 10,
     };
-    let scene = example_scenes::cube();
+    let scene = Scene::load("example_scenes/cube").unwrap();
     run_app(camera, scene);
 }
