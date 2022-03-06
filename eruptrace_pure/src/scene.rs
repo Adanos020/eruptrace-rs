@@ -6,8 +6,7 @@ use eruptrace_scene::{
     Scene,
 };
 use image::EncodableLayout;
-use std::path::PathBuf;
-use std::{mem::size_of, sync::Arc};
+use std::{mem::size_of, path::PathBuf, sync::Arc};
 use std140::*;
 use vulkano::{
     buffer::{BufferUsage, ImmutableBuffer},

@@ -1,5 +1,4 @@
-use crate::scene::SceneBuffers;
-use crate::{camera::CameraUniformBuffer, rt_shaders};
+use crate::{camera::CameraUniformBuffer, rt_shaders, scene::SceneBuffers};
 use std::sync::Arc;
 use vulkano::{
     buffer::{BufferUsage, ImmutableBuffer, TypedBufferAccess},

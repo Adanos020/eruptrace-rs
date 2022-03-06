@@ -3,8 +3,7 @@ pub mod json;
 pub mod materials;
 pub mod shapes;
 
-use crate::json::to_vec3;
-use crate::{camera::Camera, materials::*, shapes::*};
+use crate::{camera::Camera, json::to_vec3, materials::*, shapes::*};
 use serde_json as js;
 use std::{
     fs,
@@ -25,24 +24,8 @@ impl Scene {
             cam_path.push(&scene_path);
             cam_path.push("camera.json");
             let file_contents = fs::read_to_string(cam_path)?;
-            let cam_json: js::Value = js::from_str(&file_contents)?;
-
-            let position = to_vec3(&cam_json["position"]);
-            let look_at = to_vec3(&cam_json["look_at"]);
-            let up = to_vec3(&cam_json["up"]);
-            let vertical_fov = cam_json["fov"].as_f64().unwrap_or(90.0) as f32;
-            let samples = cam_json["samples"].as_u64().unwrap_or(1) as u32;
-            let max_reflections = cam_json["max_reflections"].as_u64().unwrap_or(1) as u32;
-
-            Camera {
-                position,
-                look_at,
-                up,
-                img_size: [0, 0],
-                vertical_fov,
-                samples,
-                max_reflections,
-            }
+            let cam_json = js::from_str(&file_contents)?;
+            Camera::from_json(cam_json)?
         };
 
         let scene = {
