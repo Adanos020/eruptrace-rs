@@ -97,11 +97,22 @@ impl RenderSurface {
                 .ty(ImageViewType::Dim2dArray)
                 .build()
                 .expect("Cannot create textures image.");
+            let normal_maps_image_view = ImageView::start(scene_buffers.normal_maps_image)
+                .ty(ImageViewType::Dim2dArray)
+                .build()
+                .expect("Cannot create normal maps image.");
+
             let textures_sampler = Sampler::start(queue.device().clone())
                 .filter(Filter::Linear)
                 .address_mode(SamplerAddressMode::Repeat)
                 .build()
                 .expect("Cannot build sampler for textures.");
+            let normal_maps_sampler = Sampler::start(queue.device().clone())
+                .filter(Filter::Linear)
+                .address_mode(SamplerAddressMode::Repeat)
+                .build()
+                .expect("Cannot build sampler for normal maps.");
+
             let layout = pipeline
                 .layout()
                 .descriptor_set_layouts()
@@ -115,11 +126,16 @@ impl RenderSurface {
                         textures_image_view,
                         textures_sampler,
                     ),
-                    WriteDescriptorSet::buffer(1, camera_buffer),
-                    WriteDescriptorSet::buffer(2, scene_buffers.materials_buffer),
-                    WriteDescriptorSet::buffer(3, scene_buffers.shapes_buffer),
-                    WriteDescriptorSet::buffer(4, scene_buffers.mesh_metas_buffer),
-                    WriteDescriptorSet::buffer(5, scene_buffers.mesh_data_buffer),
+                    WriteDescriptorSet::image_view_sampler(
+                        1,
+                        normal_maps_image_view,
+                        normal_maps_sampler,
+                    ),
+                    WriteDescriptorSet::buffer(2, camera_buffer),
+                    WriteDescriptorSet::buffer(3, scene_buffers.materials_buffer),
+                    WriteDescriptorSet::buffer(4, scene_buffers.shapes_buffer),
+                    WriteDescriptorSet::buffer(5, scene_buffers.mesh_metas_buffer),
+                    WriteDescriptorSet::buffer(6, scene_buffers.mesh_data_buffer),
                 ],
             )
             .expect("Cannot create descriptor set.")

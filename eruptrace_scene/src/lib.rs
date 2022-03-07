@@ -15,6 +15,7 @@ pub struct Scene {
     pub meshes: Vec<Mesh>,
     pub materials: Vec<Material>,
     pub texture_paths: Vec<PathBuf>,
+    pub normal_map_paths: Vec<PathBuf>,
 }
 
 impl Scene {
@@ -35,8 +36,8 @@ impl Scene {
             let file_contents = fs::read_to_string(desc_path)?;
             let scene_json: js::Value = js::from_str(&file_contents)?;
 
-            let (texture_names, texture_paths) = {
-                let obj = scene_json["textures"].as_object().unwrap();
+            let get_paths = |res, first_name| {
+                let obj = scene_json[res].as_object().unwrap();
                 let mut names: Vec<String> = obj.keys().map(|n| n.to_owned()).collect();
                 let mut paths: Vec<PathBuf> = obj
                     .values()
@@ -44,15 +45,15 @@ impl Scene {
                     .map(|p| {
                         let mut tex_path = PathBuf::new();
                         tex_path.push(&scene_path);
-                        tex_path.push("textures");
+                        tex_path.push(res);
                         tex_path.push(p.as_str().unwrap());
                         tex_path
                     })
                     .collect();
-                if let Some(sky_idx) = names.iter().position(|n| n == "sky") {
+                if let Some(first_idx) = names.iter().position(|n| n == first_name) {
                     unsafe {
-                        std::ptr::swap(&mut paths[0], &mut paths[sky_idx]);
-                        std::ptr::swap(&mut names[0], &mut names[sky_idx]);
+                        std::ptr::swap(&mut paths[0], &mut paths[first_idx]);
+                        std::ptr::swap(&mut names[0], &mut names[first_idx]);
                     }
                 } else {
                     eprintln!("Missing 'sky' texture.");
@@ -60,13 +61,16 @@ impl Scene {
                 (names, paths)
             };
 
+            let (texture_names, texture_paths) = get_paths("textures", "sky");
+            let (normal_map_names, normal_map_paths) = get_paths("normal_maps", "default");
+
             let (material_names, materials) = {
                 let obj = scene_json["materials"].as_object().unwrap();
                 let names: Vec<String> = obj.keys().map(|n| n.to_owned()).collect();
                 let materials: Vec<Material> = obj
                     .values()
                     .filter(|m| m.is_object())
-                    .map(|m| Material::from_json(m, &texture_names).unwrap())
+                    .map(|m| Material::from_json(m, &texture_names, &normal_map_names).unwrap())
                     .collect();
                 (names, materials)
             };
@@ -92,6 +96,7 @@ impl Scene {
                 meshes,
                 materials,
                 texture_paths,
+                normal_map_paths,
             }
         };
 

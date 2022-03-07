@@ -61,6 +61,7 @@ struct MeshMeta {
 struct Material {
     uint materialType;
     uint textureIndex;
+    uint normalMapIndex;
     float parameter;
 };
 
@@ -89,19 +90,20 @@ struct Scattering {
 layout(location = 0) out vec4 fragColour;
 
 layout(set = 0, binding = 0) uniform sampler2DArray textures;
-layout(set = 0, binding = 1) uniform CameraUniform {
+layout(set = 0, binding = 1) uniform sampler2DArray normalMaps;
+layout(set = 0, binding = 2) uniform CameraUniform {
     Camera camera;
 };
-layout(set = 0, binding = 2, std140) readonly buffer MaterialData {
+layout(set = 0, binding = 3, std140) readonly buffer MaterialData {
     Material materials[];
 };
-layout(set = 0, binding = 3) readonly buffer ShapesData {
+layout(set = 0, binding = 4) readonly buffer ShapesData {
     float shapeValues[];
 };
-layout(set = 0, binding = 4, std140) readonly buffer MeshMetasData {
+layout(set = 0, binding = 5, std140) readonly buffer MeshMetasData {
     MeshMeta meshMetas[];
 };
-layout(set = 0, binding = 5) readonly buffer MeshesData {
+layout(set = 0, binding = 6) readonly buffer MeshesData {
     float meshValues[];
 };
 
@@ -147,6 +149,20 @@ vec4 sampleTexture(vec2 texCoords, uint textureIndex) {
     return texture(textures, vec3(texCoords, textureIndex));
 }
 
+vec3 sampleNormalMap(vec2 texCoords, uint normalMapIndex) {
+    return texture(normalMaps, vec3(texCoords, normalMapIndex)).xyz;
+}
+
+vec3 mapNormal(vec3 worldNormal, vec3 mappedNormal) {
+    vec3 t = cross(worldNormal, vec3(0.f, 1.f, 0.f));
+    if (dot(t, t) < EPSILON) {
+        t = cross(worldNormal, vec3(0.f, 0.f, 1.f));
+    }
+    vec3 b = cross(worldNormal, t);
+    mat3 transform = mat3(t, b, worldNormal);
+    return normalize(transform * mappedNormal);
+}
+
 Sphere sphereAt(inout uint iShapeValue) {
     Sphere s;
     s.position      = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
@@ -164,7 +180,7 @@ bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out H
 bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax, out Hit hit);
 bool hitMesh(in Ray ray, in MeshMeta meshMeta, float distMin, float distMax, out Hit hit);
 
-bool scatter(in Hit hit, out Scattering scattering);
+bool scatter(Hit hit, out Scattering scattering);
 bool scatterDiffusive(in Hit hit, in Material mat, out Scattering scattering);
 bool scatterReflective(in Hit hit, in Material mat, out Scattering scattering);
 bool scatterRefractive(in Hit hit, in Material mat, out Scattering scattering);
@@ -357,8 +373,12 @@ bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax,
     return true;
 }
 
-bool scatter(in Hit hit, out Scattering scattering) {
+bool scatter(Hit hit, out Scattering scattering) {
     Material material = materials[hit.materialIndex];
+
+    vec3 mappedNormal = sampleNormalMap(hit.texCoords, material.normalMapIndex);
+    hit.normal = mapNormal(hit.normal, mappedNormal);
+
     switch (material.materialType) {
         case MATERIAL_DIFFUSIVE: {
             return scatterDiffusive(hit, material, scattering);

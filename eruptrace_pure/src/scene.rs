@@ -20,6 +20,7 @@ use vulkano::{
 #[derive(Clone)]
 pub struct SceneBuffers {
     pub textures_image: Arc<ImmutableImage>,
+    pub normal_maps_image: Arc<ImmutableImage>,
     pub materials_buffer: Arc<ImmutableBuffer<[MaterialStd140]>>,
     pub shapes_buffer: Arc<ImmutableBuffer<[f32]>>,
     pub mesh_metas_buffer: Arc<ImmutableBuffer<[MeshMetaStd140]>>,
@@ -31,6 +32,7 @@ pub struct SceneBuffers {
 pub struct MaterialStd140 {
     pub material_type: uint,
     pub texture_index: uint,
+    pub normal_map_index: uint,
     pub parameter: float,
 }
 
@@ -57,9 +59,12 @@ pub fn make_scene_buffers(
     BufferFuture,
     BufferFuture,
     BufferFuture,
+    BufferFuture,
 ) {
     let n_textures = scene.texture_paths.len();
-    let textures = get_texture_data(scene.texture_paths);
+    let n_normal_maps = scene.normal_map_paths.len();
+    let textures = get_image_data(scene.texture_paths);
+    let normal_maps = get_image_data(scene.normal_map_paths);
     let materials = get_material_data(scene.materials);
     let shapes = get_shapes_data(scene.spheres);
     let (mesh_metas, mesh_data) = get_mesh_data(scene.meshes);
@@ -76,6 +81,19 @@ pub fn make_scene_buffers(
         queue.clone(),
     )
     .expect("Cannot create textures image.");
+
+    let (normal_maps_image, normal_maps_future) = ImmutableImage::from_iter(
+        normal_maps,
+        ImageDimensions::Dim2d {
+            width: 1024,
+            height: 1024,
+            array_layers: n_normal_maps as u32,
+        },
+        MipmapsCount::One,
+        Format::R8G8B8A8_UNORM,
+        queue.clone(),
+    )
+    .expect("Cannot create normal maps image.");
 
     let (materials_buffer, materials_future) = ImmutableBuffer::from_iter(
         materials.into_iter(),
@@ -105,12 +123,14 @@ pub fn make_scene_buffers(
     (
         SceneBuffers {
             textures_image,
+            normal_maps_image,
             materials_buffer,
             shapes_buffer,
             mesh_metas_buffer,
             mesh_data_buffer,
         },
         textures_future,
+        normal_maps_future,
         materials_future,
         shapes_future,
         mesh_metas_future,
@@ -118,8 +138,8 @@ pub fn make_scene_buffers(
     )
 }
 
-fn get_texture_data(texture_paths: Vec<PathBuf>) -> Vec<u8> {
-    texture_paths
+fn get_image_data(image_paths: Vec<PathBuf>) -> Vec<u8> {
+    image_paths
         .into_iter()
         .map(|path| image::open(path).unwrap().into_rgba8())
         .flat_map(|texture| Vec::from(texture.as_bytes()))
@@ -130,13 +150,14 @@ fn get_material_data(materials: Vec<Material>) -> Vec<MaterialStd140> {
     let to_std140 = |mat: Material| MaterialStd140 {
         material_type: uint(mat.material_type as u32),
         texture_index: uint(mat.texture_index),
+        normal_map_index: uint(mat.normal_map_index),
         parameter: float(mat.parameter),
     };
     materials.into_iter().map(to_std140).collect()
 }
 
 fn get_shapes_data(spheres: Vec<Sphere>) -> Vec<f32> {
-    let mut data = Vec::with_capacity(spheres.len() * size_of::<Sphere>());
+    let mut data = Vec::with_capacity(1 + (spheres.len() * size_of::<Sphere>()));
 
     data.push(spheres.len() as f32);
     for sphere in spheres.into_iter() {
@@ -152,7 +173,7 @@ fn get_shapes_data(spheres: Vec<Sphere>) -> Vec<f32> {
 
 fn get_mesh_data(meshes: Vec<Mesh>) -> (Vec<MeshMetaStd140>, Vec<f32>) {
     let mut metas = Vec::with_capacity(meshes.len());
-    let mut data = Vec::with_capacity(meshes.iter().map(|m| m.size_in_f32s()).sum());
+    let mut data = Vec::with_capacity(1 + meshes.iter().map(|m| m.size_in_f32s()).sum::<usize>());
     let mut curr_mesh_start = 1u32;
 
     // Number of meshes

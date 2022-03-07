@@ -13,6 +13,7 @@ pub enum MaterialType {
 pub struct Material {
     pub material_type: MaterialType,
     pub texture_index: u32,
+    pub normal_map_index: u32,
     /// The role of this parameter depends on the material type:
     /// - Diffusive: no function
     /// - Reflective: fuzz
@@ -34,12 +35,17 @@ impl From<&str> for MaterialType {
 }
 
 impl Material {
-    pub fn from_json(object: &json::Value, texture_names: &[String]) -> anyhow::Result<Self> {
+    pub fn from_json(object: &json::Value, texture_names: &[String], normal_map_names: &[String]) -> anyhow::Result<Self> {
         let material_type = MaterialType::from(object["type"].as_str().unwrap_or_default());
 
         let texture_index = texture_names
             .iter()
             .position(|n| object["texture"] == *n)
+            .unwrap_or_default() as u32;
+
+        let normal_map_index = normal_map_names
+            .iter()
+            .position(|n| object["normal_map"] == *n)
             .unwrap_or_default() as u32;
 
         let parameter = match material_type {
@@ -52,6 +58,7 @@ impl Material {
         Ok(Material {
             material_type,
             texture_index,
+            normal_map_index,
             parameter,
         })
     }

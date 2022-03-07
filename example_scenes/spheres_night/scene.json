@@ -57,5 +57,8 @@
     "earth": "earth.png",
     "jupiter": "jupiter.png",
     "sun": "sun.png"
+  },
+  "normal_maps": {
+    "default": "flat.png"
   }
 }

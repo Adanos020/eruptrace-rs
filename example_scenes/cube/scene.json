@@ -114,16 +114,25 @@
   ],
   "materials": {
     "ground": {
-      "type": "diffusive",
-      "texture": "ground"
+      "type": "reflective",
+      "texture": "ground",
+      "normal_map": "ground",
+      "fuzz": 1.0
     },
     "cube": {
-      "type": "diffusive",
-      "texture": "cube"
+      "type": "reflective",
+      "texture": "cube",
+      "normal_map": "cube",
+      "fuzz": 0.1
     }
   },
   "textures": {
     "sky": "sky.png",
+    "ground": "grass.png",
+    "cube": "bricks.png"
+  },
+  "normal_maps": {
+    "default": "flat.png",
     "ground": "grass.png",
     "cube": "bricks.png"
   }

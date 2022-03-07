@@ -146,6 +146,7 @@ pub fn run_app(mut camera: Camera, scene: Scene) {
     let (
         scene_buffers,
         textures_future,
+        normal_maps_future,
         materials_future,
         shapes_future,
         mesh_metas_future,
@@ -161,6 +162,7 @@ pub fn run_app(mut camera: Camera, scene: Scene) {
 
     vulkano::sync::now(device.clone())
         .join(textures_future)
+        .join(normal_maps_future)
         .join(materials_future)
         .join(shapes_future)
         .join(mesh_metas_future)
