@@ -152,12 +152,13 @@ vec4 sampleTexture(vec2 texCoords, uint textureIndex) {
 }
 
 vec3 sampleNormalMap(vec2 texCoords, uint normalMapIndex) {
-    return texture(normalMaps, vec3(texCoords, normalMapIndex)).xyz;
+    vec3 normal = texture(normalMaps, vec3(texCoords, normalMapIndex)).xyz;
+    return (normal * 2.f) - 1.f;
 }
 
 vec3 mapNormal(vec3 worldNormal, vec3 mappedNormal) {
     vec3 t = cross(worldNormal, vec3(0.f, 1.f, 0.f));
-    if (dot(t, t) < EPSILON) {
+    if (dot(t, t) == 0.f) {
         t = cross(worldNormal, vec3(0.f, 0.f, 1.f));
     }
     vec3 b = cross(worldNormal, t);
@@ -382,7 +383,7 @@ bool scatter(Hit hit, out Scattering scattering) {
     hit.normal = mapNormal(hit.normal, mappedNormal);
 
 #if RENDER_NORMALS
-    scattering.color = vec4(0.5f + 0.5f * hit.normal, 1.f);
+    scattering.color = vec4(0.5f + (0.5f * hit.normal), 1.f);
     return false;
 #endif
 
