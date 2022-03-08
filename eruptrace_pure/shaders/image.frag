@@ -1,5 +1,7 @@
 #version 450
 
+#define RENDER_NORMALS 0
+
 // Math constants ------------------------------------------------------------------------------------------------------
 
 const float FLOAT_MAX = 3.402823466e+38f;
@@ -340,7 +342,7 @@ bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax,
     vec3 p = cross(ray.direction, edge2);
     float determinant = dot(edge1, p);
 
-    if (determinant < EPSILON) {
+    if (abs(determinant) < EPSILON) {
         return false;
     }
 
@@ -378,6 +380,11 @@ bool scatter(Hit hit, out Scattering scattering) {
 
     vec3 mappedNormal = sampleNormalMap(hit.texCoords, material.normalMapIndex);
     hit.normal = mapNormal(hit.normal, mappedNormal);
+
+#if RENDER_NORMALS
+    scattering.color = vec4(0.5f + 0.5f * hit.normal, 1.f);
+    return false;
+#endif
 
     switch (material.materialType) {
         case MATERIAL_DIFFUSIVE: {
