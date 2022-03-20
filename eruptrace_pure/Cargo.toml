@@ -17,8 +17,4 @@ image = "0.24"
 nalgebra-glm = "0.16"
 std140 = "0.2"
 
-vulkano = "0.28"
-vulkano-shaders = "0.28"
-vulkano-win = "0.28"
-
 winit = "0.26"
