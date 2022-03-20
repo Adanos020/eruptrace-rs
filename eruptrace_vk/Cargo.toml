@@ -1,0 +1,10 @@
+[package]
+name = "eruptrace_vk"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+erupt = "0.22"
+vk-mem-erupt = { git = "https://github.com/HindrikStegenga/vk-mem-erupt" }

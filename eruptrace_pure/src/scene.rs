@@ -1,30 +1,28 @@
 #![allow(clippy::no_effect)]
 
+use erupt::{vk, DeviceLoader};
 use eruptrace_scene::{
     materials::Material,
     shapes::{Mesh, Sphere},
     Scene,
 };
+use eruptrace_vk::{AllocatedBuffer, AllocatedImage, VulkanContext};
 use image::EncodableLayout;
-use std::{mem::size_of, path::PathBuf, sync::Arc};
-use std140::*;
-use vulkano::{
-    buffer::{BufferUsage, ImmutableBuffer},
-    command_buffer::{CommandBufferExecFuture, PrimaryAutoCommandBuffer},
-    device::Queue,
-    format::Format,
-    image::{ImageDimensions, ImmutableImage, MipmapsCount},
-    sync::NowFuture,
+use std::{
+    path::PathBuf,
+    sync::{Arc, RwLock},
 };
+use std140::*;
+use vk_mem_erupt as vma;
 
 #[derive(Clone)]
 pub struct SceneBuffers {
-    pub textures_image: Arc<ImmutableImage>,
-    pub normal_maps_image: Arc<ImmutableImage>,
-    pub materials_buffer: Arc<ImmutableBuffer<[MaterialStd140]>>,
-    pub shapes_buffer: Arc<ImmutableBuffer<[f32]>>,
-    pub mesh_metas_buffer: Arc<ImmutableBuffer<[MeshMetaStd140]>>,
-    pub mesh_data_buffer: Arc<ImmutableBuffer<[f32]>>,
+    pub textures_image: AllocatedImage,
+    pub normal_maps_image: AllocatedImage,
+    pub materials_buffer: AllocatedBuffer<MaterialStd140>,
+    pub shapes_buffer: AllocatedBuffer<f32>,
+    pub mesh_metas_buffer: AllocatedBuffer<MeshMetaStd140>,
+    pub mesh_data_buffer: AllocatedBuffer<f32>,
 }
 
 #[repr_std140]
@@ -47,95 +45,92 @@ pub struct MeshMetaStd140 {
     pub mesh_end: uint,
 }
 
-pub type BufferFuture = CommandBufferExecFuture<NowFuture, PrimaryAutoCommandBuffer>;
+impl SceneBuffers {
+    pub fn create_buffers(
+        allocator: Arc<RwLock<vma::Allocator>>,
+        vk_ctx: VulkanContext,
+        scene: Scene,
+    ) -> vma::Result<Self> {
+        let n_textures = scene.texture_paths.len();
+        let n_normal_maps = scene.normal_map_paths.len();
+        let textures = get_image_data(scene.texture_paths);
+        let normal_maps = get_image_data(scene.normal_map_paths);
+        let materials = get_material_data(scene.materials);
+        let shapes = get_shapes_data(scene.spheres);
+        let (mesh_metas, mesh_data) = get_mesh_data(scene.meshes);
 
-pub fn make_scene_buffers(
-    queue: Arc<Queue>,
-    scene: Scene,
-) -> (
-    SceneBuffers,
-    BufferFuture,
-    BufferFuture,
-    BufferFuture,
-    BufferFuture,
-    BufferFuture,
-    BufferFuture,
-) {
-    let n_textures = scene.texture_paths.len();
-    let n_normal_maps = scene.normal_map_paths.len();
-    let textures = get_image_data(scene.texture_paths);
-    let normal_maps = get_image_data(scene.normal_map_paths);
-    let materials = get_material_data(scene.materials);
-    let shapes = get_shapes_data(scene.spheres);
-    let (mesh_metas, mesh_data) = get_mesh_data(scene.meshes);
-
-    let (textures_image, textures_future) = ImmutableImage::from_iter(
-        textures,
-        ImageDimensions::Dim2d {
+        let image_extent = vk::Extent3D {
             width: 1024,
             height: 1024,
-            array_layers: n_textures as u32,
-        },
-        MipmapsCount::One,
-        Format::R8G8B8A8_UNORM,
-        queue.clone(),
-    )
-    .expect("Cannot create textures image.");
+            depth: 1,
+        };
 
-    let (normal_maps_image, normal_maps_future) = ImmutableImage::from_iter(
-        normal_maps,
-        ImageDimensions::Dim2d {
-            width: 1024,
-            height: 1024,
-            array_layers: n_normal_maps as u32,
-        },
-        MipmapsCount::One,
-        Format::R8G8B8A8_UNORM,
-        queue.clone(),
-    )
-    .expect("Cannot create normal maps image.");
+        let buffer_info = vk::BufferCreateInfoBuilder::new()
+            .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+        let buffer_allocation_info = vma::AllocationCreateInfo {
+            usage: vma::MemoryUsage::CpuToGpu,
+            flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
+                | vma::AllocationCreateFlags::MAPPED,
+            ..Default::default()
+        };
 
-    let (materials_buffer, materials_future) = ImmutableBuffer::from_iter(
-        materials.into_iter(),
-        BufferUsage::storage_buffer(),
-        queue.clone(),
-    )
-    .expect("Cannot create buffer for materials.");
+        Ok(SceneBuffers {
+            textures_image: AllocatedImage::with_data(
+                vk_ctx.clone(),
+                allocator.clone(),
+                vk::Format::R8G8B8A8_UNORM,
+                image_extent,
+                vk::ImageViewType::_2D_ARRAY,
+                1,
+                n_textures as u32,
+                &textures,
+            )?,
+            normal_maps_image: AllocatedImage::with_data(
+                vk_ctx,
+                allocator.clone(),
+                vk::Format::R8G8B8A8_UNORM,
+                image_extent,
+                vk::ImageViewType::_2D_ARRAY,
+                1,
+                n_normal_maps as u32,
+                &normal_maps,
+            )?,
+            materials_buffer: AllocatedBuffer::with_data(
+                allocator.clone(),
+                &buffer_info,
+                buffer_allocation_info.clone(),
+                &materials,
+            )?,
+            shapes_buffer: AllocatedBuffer::with_data(
+                allocator.clone(),
+                &buffer_info,
+                buffer_allocation_info.clone(),
+                &shapes,
+            )?,
+            mesh_metas_buffer: AllocatedBuffer::with_data(
+                allocator.clone(),
+                &buffer_info,
+                buffer_allocation_info.clone(),
+                &mesh_metas,
+            )?,
+            mesh_data_buffer: AllocatedBuffer::with_data(
+                allocator,
+                &buffer_info,
+                buffer_allocation_info,
+                &mesh_data,
+            )?,
+        })
+    }
 
-    let (shapes_buffer, shapes_future) = ImmutableBuffer::from_iter(
-        shapes.into_iter(),
-        BufferUsage::storage_buffer(),
-        queue.clone(),
-    )
-    .expect("Cannot create buffer for shape data.");
-
-    let (mesh_metas_buffer, mesh_metas_future) = ImmutableBuffer::from_iter(
-        mesh_metas.into_iter(),
-        BufferUsage::storage_buffer(),
-        queue.clone(),
-    )
-    .expect("Cannot create buffer for mesh metas.");
-
-    let (mesh_data_buffer, mesh_data_future) =
-        ImmutableBuffer::from_iter(mesh_data.into_iter(), BufferUsage::storage_buffer(), queue)
-            .expect("Cannot create buffer for mesh data.");
-
-    (
-        SceneBuffers {
-            textures_image,
-            normal_maps_image,
-            materials_buffer,
-            shapes_buffer,
-            mesh_metas_buffer,
-            mesh_data_buffer,
-        },
-        textures_future,
-        normal_maps_future,
-        materials_future,
-        shapes_future,
-        mesh_metas_future,
-        mesh_data_future,
-    )
+    pub fn destroy(&self, device: &DeviceLoader) {
+        self.textures_image.destroy(device);
+        self.normal_maps_image.destroy(device);
+        self.materials_buffer.destroy();
+        self.shapes_buffer.destroy();
+        self.mesh_metas_buffer.destroy();
+        self.mesh_data_buffer.destroy();
+    }
 }
 
 fn get_image_data(image_paths: Vec<PathBuf>) -> Vec<u8> {
@@ -157,7 +152,7 @@ fn get_material_data(materials: Vec<Material>) -> Vec<MaterialStd140> {
 }
 
 fn get_shapes_data(spheres: Vec<Sphere>) -> Vec<f32> {
-    let mut data = Vec::with_capacity(1 + (spheres.len() * size_of::<Sphere>()));
+    let mut data = Vec::with_capacity(1 + (spheres.len() * std::mem::size_of::<Sphere>()));
 
     data.push(spheres.len() as f32);
     for sphere in spheres.into_iter() {

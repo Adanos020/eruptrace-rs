@@ -123,7 +123,7 @@
       "type": "reflective",
       "texture": "cube",
       "normal_map": "cube",
-      "fuzz": 0.1
+      "fuzz": 0.3
     }
   },
   "textures": {

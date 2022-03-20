@@ -1,13 +1,12 @@
 #![allow(clippy::no_effect)]
 
+use erupt::vk;
 use eruptrace_scene::camera::Camera;
+use eruptrace_vk::AllocatedBuffer;
 use nalgebra_glm as glm;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std140::*;
-use vulkano::{
-    buffer::{BufferUsage, CpuAccessibleBuffer},
-    device::Device,
-};
+use vk_mem_erupt as vma;
 
 #[repr_std140]
 #[derive(Copy, Clone, Debug)]
@@ -22,12 +21,21 @@ pub struct CameraUniform {
     pub max_reflections: uint,
 }
 
-pub type CameraUniformBuffer = Arc<CpuAccessibleBuffer<CameraUniform>>;
-
 impl CameraUniform {
-    pub fn to_buffer(self, device: Arc<Device>) -> CameraUniformBuffer {
-        CpuAccessibleBuffer::from_data(device, BufferUsage::uniform_buffer(), false, self)
-            .expect("Cannot create uniform buffer for camera.")
+    pub fn create_buffer(
+        self,
+        allocator: Arc<RwLock<vma::Allocator>>,
+    ) -> vma::Result<AllocatedBuffer<Self>> {
+        let buffer_info = vk::BufferCreateInfoBuilder::new()
+            .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+        let allocation_info = vma::AllocationCreateInfo {
+            usage: vma::MemoryUsage::CpuToGpu,
+            flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
+                | vma::AllocationCreateFlags::MAPPED,
+            ..Default::default()
+        };
+        AllocatedBuffer::with_data(allocator, &buffer_info, allocation_info, &[self])
     }
 }
 

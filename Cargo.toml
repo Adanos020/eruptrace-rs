@@ -3,6 +3,7 @@
 members = [
     "eruptrace_pure",
     "eruptrace_scene",
+    "eruptrace_vk",
 ]
 
 [package]
@@ -16,6 +17,13 @@ edition = "2021"
 [dependencies]
 eruptrace_pure = { path = "eruptrace_pure" }
 eruptrace_scene = { path = "eruptrace_scene" }
+eruptrace_vk = { path = "eruptrace_vk" }
 
+erupt = "0.22"
+erupt-bootstrap = "0.2.3"
+vk-mem-erupt = { git = "https://github.com/HindrikStegenga/vk-mem-erupt" }
+
+anyhow = "1.0"
 nalgebra-glm = "0.16"
 pico-args = "0.4"
+winit = "0.26"

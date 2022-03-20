@@ -1,16 +1,2 @@
-#![allow(clippy::needless_question_mark)]
-
-pub mod rt_shaders {
-    vulkano_shaders::shader! {
-        shaders: {
-            vertex: {
-                ty: "vertex",
-                path: "shaders/image.vert"
-            },
-            fragment: {
-                ty: "fragment",
-                path: "shaders/image.frag"
-            }
-        }
-    }
-}
+pub static VERTEX_SHADER: &[u8] = include_bytes!("../shaders/image_vert.spv");
+pub static FRAGMENT_SHADER: &[u8] = include_bytes!("../shaders/image_frag.spv");
