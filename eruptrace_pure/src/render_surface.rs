@@ -1,4 +1,6 @@
 use crate::scene::SceneBuffers;
+use crate::shaders::*;
+use crate::CameraUniform;
 use erupt::{vk, DeviceLoader, ExtendableFrom, SmallVec};
 use eruptrace_vk::contexts::{PipelineContext, RenderContext};
 use eruptrace_vk::{shader::make_shader_module, AllocatedBuffer, VulkanContext};
@@ -8,8 +10,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 use vk_mem_erupt as vma;
-use crate::CameraUniform;
-use crate::shaders::*;
 
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug)]

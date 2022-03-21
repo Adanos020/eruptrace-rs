@@ -1,11 +1,10 @@
+use erupt::vk;
+use eruptrace_rs::App;
 use eruptrace_scene::Scene;
 use std::path::PathBuf;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
-use eruptrace_rs::App;
-use erupt::vk;
-
 
 struct EruptraceArgs {
     scene_path: PathBuf,
@@ -38,10 +37,16 @@ fn main() {
             event_loop.run(move |event, _, control_flow| {
                 *control_flow = ControlFlow::Poll;
                 match event {
-                    Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+                    Event::WindowEvent {
+                        event: WindowEvent::CloseRequested,
+                        ..
+                    } => {
                         *control_flow = ControlFlow::Exit;
                     }
-                    Event::WindowEvent { event: WindowEvent::Resized(size), .. } => {
+                    Event::WindowEvent {
+                        event: WindowEvent::Resized(size),
+                        ..
+                    } => {
                         let [width, height]: [u32; 2] = size.into();
                         app.resize(vk::Extent2D { width, height })
                     }

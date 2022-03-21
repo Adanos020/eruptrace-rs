@@ -20,52 +20,46 @@ impl<T: Sized> AllocatedBuffer<T> {
         allocation_info: vma::AllocationCreateInfo,
         data: &[T],
     ) -> vma::Result<Self> {
-        let buffer_size = std::mem::size_of::<T>() * data.len();
-        let buffer_info = buffer_info.size(buffer_size as vk::DeviceSize);
+        let data_size = std::mem::size_of::<T>() * data.len();
+        let buffer_info = buffer_info.size(data_size as vk::DeviceSize);
         let (buffer, allocation, allocation_info) = allocator
             .read()
             .unwrap()
             .create_buffer(&buffer_info, &allocation_info)?;
-
-        let buffer_addr = allocator
-            .read()
-            .unwrap()
-            .map_memory(&allocation)
-            .expect("Cannot map allocated memory");
-        assert_ne!(buffer_addr, std::ptr::null_mut());
-        unsafe {
-            let bytes = std::slice::from_raw_parts(data.as_ptr() as *const u8, buffer_size);
-            std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer_addr, buffer_size);
-        }
-        allocator.read().unwrap().unmap_memory(&allocation);
         allocator
             .read()
             .unwrap()
-            .flush_allocation(&allocation, 0, buffer_size);
-
-        Ok(Self {
+            .flush_allocation(&allocation, 0, data_size);
+        let mut buf = Self {
             buffer,
             size: buffer_info.size,
             allocator,
             allocation,
             allocation_info,
             _phantom: Default::default(),
-        })
+        };
+        buf.set_data(data);
+        Ok(buf)
     }
 
     pub fn set_data(&mut self, data: &[T]) {
-        let buffer_size = std::mem::size_of::<T>() * data.len();
-        let buffer_addr = self.allocator
-            .write()
+        let data_size = std::mem::size_of::<T>() * data.len();
+        assert!(data_size <= self.allocation_info.get_size());
+        let buffer_addr = self
+            .allocator
+            .read()
             .unwrap()
             .map_memory(&self.allocation)
             .expect("Cannot map allocated memory");
         assert_ne!(buffer_addr, std::ptr::null_mut());
         unsafe {
-            let bytes = std::slice::from_raw_parts(data.as_ptr() as *const u8, buffer_size);
-            std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer_addr, buffer_size);
+            let bytes = std::slice::from_raw_parts(data.as_ptr() as *const u8, data_size);
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer_addr, data_size);
         }
-        self.allocator.read().unwrap().unmap_memory(&self.allocation);
+        self.allocator
+            .read()
+            .unwrap()
+            .unmap_memory(&self.allocation);
     }
 
     pub fn destroy(&self) {

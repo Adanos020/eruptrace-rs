@@ -1,4 +1,6 @@
-use erupt::{utils::surface, vk, EntryLoader, ExtendableFrom, SmallVec, InstanceLoader, DeviceLoader};
+use erupt::{
+    utils::surface, vk, DeviceLoader, EntryLoader, ExtendableFrom, InstanceLoader, SmallVec,
+};
 use erupt_bootstrap as vkb;
 use eruptrace_pure::PureRayTracer;
 use eruptrace_scene::{camera::Camera, Scene};
@@ -64,9 +66,8 @@ impl App {
                 .queue_family(graphics_present)
                 .for_surface(surface)
                 .require_features(&device_features);
-            let (device, device_meta) = unsafe {
-                device_builder.build(instance.as_ref().unwrap(), &instance_meta)?
-            };
+            let (device, device_meta) =
+                unsafe { device_builder.build(instance.as_ref().unwrap(), &instance_meta)? };
             let (queue, queue_family) = device_meta
                 .device_queue(instance.as_ref().unwrap(), &device, graphics_present, 0)?
                 .expect("Cannot get graphics present queue");
@@ -75,7 +76,9 @@ impl App {
 
         let format = {
             let surface_formats = unsafe {
-                instance.as_ref().unwrap()
+                instance
+                    .as_ref()
+                    .unwrap()
                     .get_physical_device_surface_formats_khr(
                         device_meta.physical_device(),
                         surface,
@@ -98,7 +101,7 @@ impl App {
                         ];
                         desirable_formats.contains(&f.format)
                     })
-                    .unwrap_or(&surface_formats[0])
+                    .unwrap_or(&surface_formats[0]),
             }
         };
 
@@ -129,7 +132,9 @@ impl App {
                 )
                 .queue_family_index(queue_family);
             unsafe {
-                device.as_ref().unwrap()
+                device
+                    .as_ref()
+                    .unwrap()
                     .create_command_pool(&create_info, None)
                     .expect("Cannot create command pool")
             }
@@ -141,7 +146,9 @@ impl App {
                 .level(vk::CommandBufferLevel::PRIMARY)
                 .command_buffer_count(swapchain.frames_in_flight() as u32);
             unsafe {
-                device.as_ref().unwrap()
+                device
+                    .as_ref()
+                    .unwrap()
                     .allocate_command_buffers(&allocate_info)
                     .expect("Cannot allocate command buffers")
             }
@@ -153,7 +160,9 @@ impl App {
                 let create_info = vk::SemaphoreCreateInfoBuilder::default();
                 FrameContext {
                     command_buffer,
-                    complete: device.as_ref().unwrap()
+                    complete: device
+                        .as_ref()
+                        .unwrap()
                         .create_semaphore(&create_info, None)
                         .expect("Cannot create frame semaphore"),
                 }
@@ -163,7 +172,9 @@ impl App {
         let upload_fence = {
             let create_info = vk::FenceCreateInfoBuilder::new();
             unsafe {
-                device.as_ref().unwrap()
+                device
+                    .as_ref()
+                    .unwrap()
                     .create_fence(&create_info, None)
                     .expect("Cannot create fence")
             }
@@ -179,7 +190,8 @@ impl App {
                 frame_in_use_count: 0,
                 heap_size_limits: None,
             };
-            let allocator = vma::Allocator::new(&create_info).expect("Cannot create memory allocator");
+            let allocator =
+                vma::Allocator::new(&create_info).expect("Cannot create memory allocator");
             Some(Arc::new(RwLock::new(allocator)))
         };
 
@@ -220,7 +232,10 @@ impl App {
     pub fn resize(&mut self, extent: vk::Extent2D) {
         self.swapchain.update(extent);
         self.camera.img_size = [extent.width, extent.height];
-        self.pure_ray_tracer.as_mut().unwrap().update_camera(self.camera);
+        self.pure_ray_tracer
+            .as_mut()
+            .unwrap()
+            .update_camera(self.camera);
     }
 
     pub fn render(&mut self) {
@@ -234,17 +249,25 @@ impl App {
 
         let acquired_frame = unsafe {
             self.swapchain
-                .acquire(self.instance.as_ref().unwrap(), self.device.as_ref().unwrap(), u64::MAX)
+                .acquire(
+                    self.instance.as_ref().unwrap(),
+                    self.device.as_ref().unwrap(),
+                    u64::MAX,
+                )
                 .unwrap()
         };
 
         if acquired_frame.invalidate_images {
             for &image_view in self.swapchain_image_views.iter() {
                 unsafe {
-                    self.device.as_ref().unwrap().destroy_image_view(image_view, None);
+                    self.device
+                        .as_ref()
+                        .unwrap()
+                        .destroy_image_view(image_view, None);
                 }
             }
-            self.swapchain_image_views = self.swapchain
+            self.swapchain_image_views = self
+                .swapchain
                 .images()
                 .iter()
                 .map(|&img| unsafe {
@@ -253,7 +276,9 @@ impl App {
                         .view_type(vk::ImageViewType::_2D)
                         .format(self.swapchain.format().format)
                         .subresource_range(subresource_range);
-                    self.device.as_ref().unwrap()
+                    self.device
+                        .as_ref()
+                        .unwrap()
                         .create_image_view(&create_info, None)
                         .expect("Cannot create swapchain image view")
                 })
@@ -270,17 +295,26 @@ impl App {
         unsafe {
             let begin_info = vk::CommandBufferBeginInfoBuilder::new()
                 .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-            self.device.as_ref().unwrap()
+            self.device
+                .as_ref()
+                .unwrap()
                 .begin_command_buffer(in_flight.command_buffer, &begin_info)
                 .expect("Cannot begin command buffer");
-            self.device.as_ref().unwrap().cmd_set_scissor(in_flight.command_buffer, 0, &[scissor]);
+            self.device
+                .as_ref()
+                .unwrap()
+                .cmd_set_scissor(in_flight.command_buffer, 0, &[scissor]);
 
             let viewport = vk::ViewportBuilder::new()
                 .width(extent.width as _)
                 .height(extent.height as _)
                 .min_depth(0.0)
                 .max_depth(1.0);
-            self.device.as_ref().unwrap().cmd_set_viewport(in_flight.command_buffer, 0, &[viewport]);
+            self.device.as_ref().unwrap().cmd_set_viewport(
+                in_flight.command_buffer,
+                0,
+                &[viewport],
+            );
         }
 
         let barrier_transfer_to_colour_attachment = vk::ImageMemoryBarrier2Builder::new()
@@ -298,7 +332,10 @@ impl App {
             let dependency_info = vk::DependencyInfoBuilder::new().image_memory_barriers(
                 std::slice::from_ref(&barrier_transfer_to_colour_attachment),
             );
-            self.device.as_ref().unwrap().cmd_pipeline_barrier2(in_flight.command_buffer, &dependency_info);
+            self.device
+                .as_ref()
+                .unwrap()
+                .cmd_pipeline_barrier2(in_flight.command_buffer, &dependency_info);
         }
 
         let colour_attachment = vk::RenderingAttachmentInfoBuilder::new()
@@ -322,16 +359,25 @@ impl App {
             });
 
         unsafe {
-            self.device.as_ref().unwrap().cmd_begin_rendering(in_flight.command_buffer, &rendering_info);
+            self.device
+                .as_ref()
+                .unwrap()
+                .cmd_begin_rendering(in_flight.command_buffer, &rendering_info);
         }
 
-        self.pure_ray_tracer.as_ref().unwrap().render(RenderContext {
-            device: self.device.as_ref().unwrap(),
-            command_buffer: in_flight.command_buffer,
-        });
+        self.pure_ray_tracer
+            .as_ref()
+            .unwrap()
+            .render(RenderContext {
+                device: self.device.as_ref().unwrap(),
+                command_buffer: in_flight.command_buffer,
+            });
 
         unsafe {
-            self.device.as_ref().unwrap().cmd_end_rendering(in_flight.command_buffer);
+            self.device
+                .as_ref()
+                .unwrap()
+                .cmd_end_rendering(in_flight.command_buffer);
         }
 
         let barrier_transfer_to_present = vk::ImageMemoryBarrier2Builder::new()
@@ -351,8 +397,13 @@ impl App {
         unsafe {
             let dependency_info = vk::DependencyInfoBuilder::new()
                 .image_memory_barriers(std::slice::from_ref(&barrier_transfer_to_present));
-            self.device.as_ref().unwrap().cmd_pipeline_barrier2(in_flight.command_buffer, &dependency_info);
-            self.device.as_ref().unwrap()
+            self.device
+                .as_ref()
+                .unwrap()
+                .cmd_pipeline_barrier2(in_flight.command_buffer, &dependency_info);
+            self.device
+                .as_ref()
+                .unwrap()
                 .end_command_buffer(in_flight.command_buffer)
                 .expect("Cannot end command buffer");
         }
@@ -370,7 +421,9 @@ impl App {
             .signal_semaphore_infos(std::slice::from_ref(&signal_semaphore))
             .command_buffer_infos(std::slice::from_ref(&command_buffer_info));
         unsafe {
-            self.device.as_ref().unwrap()
+            self.device
+                .as_ref()
+                .unwrap()
                 .queue_submit2(self.queue, &[submit_info], acquired_frame.complete)
                 .expect("Cannot submit commands to queue");
             self.swapchain
@@ -388,23 +441,39 @@ impl App {
 impl Drop for App {
     fn drop(&mut self) {
         unsafe {
-            self.device.as_ref().unwrap().device_wait_idle().expect("Cannot wait idle");
+            self.device
+                .as_ref()
+                .unwrap()
+                .device_wait_idle()
+                .expect("Cannot wait idle");
 
             for &image_view in self.swapchain_image_views.iter() {
-                self.device.as_ref().unwrap().destroy_image_view(image_view, None);
+                self.device
+                    .as_ref()
+                    .unwrap()
+                    .destroy_image_view(image_view, None);
             }
 
             for frame in self.frames.iter() {
-                self.device.as_ref().unwrap().destroy_semaphore(frame.complete, None);
+                self.device
+                    .as_ref()
+                    .unwrap()
+                    .destroy_semaphore(frame.complete, None);
             }
 
-            self.device.as_ref().unwrap().destroy_fence(self.upload_fence, None);
+            self.device
+                .as_ref()
+                .unwrap()
+                .destroy_fence(self.upload_fence, None);
 
             let prt_ref = self.pure_ray_tracer.as_ref().unwrap();
             prt_ref.destroy(self.device.as_ref().unwrap());
             self.pure_ray_tracer = None;
 
-            self.device.as_ref().unwrap().destroy_command_pool(self.command_pool, None);
+            self.device
+                .as_ref()
+                .unwrap()
+                .destroy_command_pool(self.command_pool, None);
 
             self.swapchain.destroy(self.device.as_ref().unwrap());
 
@@ -413,14 +482,20 @@ impl Drop for App {
             drop(alc_lock);
             self.allocator = None;
 
-            self.instance.as_ref().unwrap().destroy_surface_khr(self.surface, None);
+            self.instance
+                .as_ref()
+                .unwrap()
+                .destroy_surface_khr(self.surface, None);
 
             self.device.as_ref().unwrap().destroy_device(None);
             self.device = None;
 
             if let Some(debug_messenger) = self.debug_messenger {
                 if !debug_messenger.is_null() {
-                    self.instance.as_ref().unwrap().destroy_debug_utils_messenger_ext(debug_messenger, None);
+                    self.instance
+                        .as_ref()
+                        .unwrap()
+                        .destroy_debug_utils_messenger_ext(debug_messenger, None);
                 }
             }
 
