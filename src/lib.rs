@@ -286,8 +286,8 @@ impl App {
         }
 
         let in_flight = &self.frames[acquired_frame.frame_index];
-        let swapchain_image = self.swapchain.images()[acquired_frame.frame_index];
-        let swapchain_image_view = self.swapchain_image_views[acquired_frame.frame_index];
+        let swapchain_image = self.swapchain.images()[acquired_frame.image_index];
+        let swapchain_image_view = self.swapchain_image_views[acquired_frame.image_index];
 
         let extent = self.swapchain.extent();
         let scissor = vk::Rect2DBuilder::new().extent(extent);
@@ -431,7 +431,7 @@ impl App {
                     self.device.as_ref().unwrap(),
                     self.queue,
                     in_flight.complete,
-                    acquired_frame.frame_index,
+                    acquired_frame.image_index,
                 )
                 .expect("Cannot present");
         }
