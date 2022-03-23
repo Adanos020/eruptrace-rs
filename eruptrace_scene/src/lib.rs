@@ -1,9 +1,10 @@
+pub mod bih;
 pub mod camera;
 pub mod json;
 pub mod materials;
-pub mod shapes;
+pub mod mesh;
 
-use crate::{camera::Camera, json::to_vec3, materials::*, shapes::*};
+use crate::{camera::Camera, json::to_vec3, materials::*, mesh::*};
 use serde_json as js;
 use std::{
     fs,
@@ -11,7 +12,6 @@ use std::{
 };
 
 pub struct Scene {
-    pub spheres: Vec<Sphere>,
     pub meshes: Vec<Mesh>,
     pub materials: Vec<Material>,
     pub texture_paths: Vec<PathBuf>,
@@ -75,14 +75,6 @@ impl Scene {
                 (names, materials)
             };
 
-            let spheres = scene_json["spheres"]
-                .as_array()
-                .map_or(&vec![], |v| v)
-                .iter()
-                .filter(|s| s.is_object())
-                .map(|s| Sphere::from_json(s, &material_names).unwrap())
-                .collect();
-
             let meshes = scene_json["meshes"]
                 .as_array()
                 .map_or(&vec![], |v| v)
@@ -92,7 +84,6 @@ impl Scene {
                 .collect();
 
             Self {
-                spheres,
                 meshes,
                 materials,
                 texture_paths,

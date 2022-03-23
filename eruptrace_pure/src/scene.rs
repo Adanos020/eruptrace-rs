@@ -1,11 +1,7 @@
 #![allow(clippy::no_effect)]
 
 use erupt::{vk, DeviceLoader};
-use eruptrace_scene::{
-    materials::Material,
-    shapes::{Mesh, Sphere},
-    Scene,
-};
+use eruptrace_scene::{materials::Material, mesh::Mesh, Scene};
 use eruptrace_vk::{AllocatedBuffer, AllocatedImage, VulkanContext};
 use image::EncodableLayout;
 use std::{
@@ -20,7 +16,6 @@ pub struct SceneBuffers {
     pub textures_image: AllocatedImage,
     pub normal_maps_image: AllocatedImage,
     pub materials_buffer: AllocatedBuffer<MaterialStd140>,
-    pub shapes_buffer: AllocatedBuffer<f32>,
     pub mesh_metas_buffer: AllocatedBuffer<MeshMetaStd140>,
     pub mesh_data_buffer: AllocatedBuffer<f32>,
 }
@@ -56,7 +51,6 @@ impl SceneBuffers {
         let textures = get_image_data(scene.texture_paths);
         let normal_maps = get_image_data(scene.normal_map_paths);
         let materials = get_material_data(scene.materials);
-        let shapes = get_shapes_data(scene.spheres);
         let (mesh_metas, mesh_data) = get_mesh_data(scene.meshes);
 
         let image_extent = vk::Extent3D {
@@ -102,12 +96,6 @@ impl SceneBuffers {
                 buffer_allocation_info.clone(),
                 &materials,
             )?,
-            shapes_buffer: AllocatedBuffer::with_data(
-                allocator.clone(),
-                &buffer_info,
-                buffer_allocation_info.clone(),
-                &shapes,
-            )?,
             mesh_metas_buffer: AllocatedBuffer::with_data(
                 allocator.clone(),
                 &buffer_info,
@@ -127,7 +115,6 @@ impl SceneBuffers {
         self.textures_image.destroy(device);
         self.normal_maps_image.destroy(device);
         self.materials_buffer.destroy();
-        self.shapes_buffer.destroy();
         self.mesh_metas_buffer.destroy();
         self.mesh_data_buffer.destroy();
     }
@@ -149,21 +136,6 @@ fn get_material_data(materials: Vec<Material>) -> Vec<MaterialStd140> {
         parameter: float(mat.parameter),
     };
     materials.into_iter().map(to_std140).collect()
-}
-
-fn get_shapes_data(spheres: Vec<Sphere>) -> Vec<f32> {
-    let mut data = Vec::with_capacity(1 + (spheres.len() * std::mem::size_of::<Sphere>()));
-
-    data.push(spheres.len() as f32);
-    for sphere in spheres.into_iter() {
-        data.push(sphere.position.x);
-        data.push(sphere.position.y);
-        data.push(sphere.position.z);
-        data.push(sphere.radius as f32);
-        data.push(sphere.material_index as f32);
-    }
-
-    data
 }
 
 fn get_mesh_data(meshes: Vec<Mesh>) -> (Vec<MeshMetaStd140>, Vec<f32>) {

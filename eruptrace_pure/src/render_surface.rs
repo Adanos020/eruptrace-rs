@@ -57,11 +57,11 @@ impl RenderSurface {
                     .descriptor_count(1)
                     .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                     .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-                vk::DescriptorSetLayoutBindingBuilder::new()
-                    .binding(3)
-                    .descriptor_count(1)
-                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                // vk::DescriptorSetLayoutBindingBuilder::new()
+                //     .binding(3)
+                //     .descriptor_count(1)
+                //     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                //     .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 vk::DescriptorSetLayoutBindingBuilder::new()
                     .binding(4)
                     .descriptor_count(1)
@@ -163,9 +163,9 @@ impl RenderSurface {
             vk::DescriptorBufferInfoBuilder::new()
                 .buffer(scene_buffers.materials_buffer.buffer)
                 .range(vk::WHOLE_SIZE),
-            vk::DescriptorBufferInfoBuilder::new()
-                .buffer(scene_buffers.shapes_buffer.buffer)
-                .range(vk::WHOLE_SIZE),
+            // vk::DescriptorBufferInfoBuilder::new()
+            //     .buffer(scene_buffers.bih_buffer.buffer)
+            //     .range(vk::WHOLE_SIZE),
             vk::DescriptorBufferInfoBuilder::new()
                 .buffer(scene_buffers.mesh_metas_buffer.buffer)
                 .range(vk::WHOLE_SIZE),
@@ -186,7 +186,7 @@ impl RenderSurface {
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .buffer_info(&uniform_buffer_infos),
             vk::WriteDescriptorSetBuilder::new()
-                .dst_binding(3)
+                .dst_binding(4) // TODO change back to 3
                 .dst_set(descriptor_sets[0])
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&storage_buffer_infos),

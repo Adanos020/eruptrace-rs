@@ -2,13 +2,6 @@ use crate::json::{to_vec2, to_vec3};
 use nalgebra_glm as glm;
 use serde_json as js;
 
-#[derive(Copy, Clone, Debug)]
-pub struct Sphere {
-    pub position: glm::TVec3<f32>,
-    pub radius: f32,
-    pub material_index: u32,
-}
-
 #[derive(Clone, Debug)]
 pub struct Mesh {
     pub positions: Vec<glm::TVec3<f32>>,
@@ -16,25 +9,6 @@ pub struct Mesh {
     pub texcoords: Vec<glm::TVec2<f32>>,
     pub indices: Vec<u32>,
     pub material_index: u32,
-}
-
-impl Sphere {
-    pub fn from_json(object: &js::Value, material_names: &[String]) -> anyhow::Result<Self> {
-        let position = to_vec3(&object["position"]);
-
-        let radius = object["radius"].as_f64().unwrap_or(0.0) as f32;
-
-        let material_index = material_names
-            .iter()
-            .position(|n| object["material"] == *n)
-            .unwrap_or_default() as u32;
-
-        Ok(Self {
-            position,
-            radius,
-            material_index,
-        })
-    }
 }
 
 impl Mesh {

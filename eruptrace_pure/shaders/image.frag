@@ -39,12 +39,6 @@ struct Vertex {
     vec2 texCoords;
 };
 
-struct Sphere {
-    vec3 position;
-    float radius;
-    uint materialIndex;
-};
-
 struct Triangle {
     Vertex a;
     Vertex b;
@@ -96,11 +90,11 @@ layout(set = 0, binding = 1) uniform sampler2DArray normalMaps;
 layout(set = 0, binding = 2) uniform CameraUniform {
     Camera camera;
 };
-layout(set = 0, binding = 3, std140) readonly buffer MaterialData {
+//layout(set = 0, binding = 3, std140) readonly buffer BIH {
+//    // BIH
+//};
+layout(set = 0, binding = 4, std140) readonly buffer MaterialData {
     Material materials[];
-};
-layout(set = 0, binding = 4) readonly buffer ShapesData {
-    float shapeValues[];
 };
 layout(set = 0, binding = 5, std140) readonly buffer MeshMetasData {
     MeshMeta meshMetas[];
@@ -166,20 +160,11 @@ vec3 mapNormal(vec3 worldNormal, vec3 mappedNormal) {
     return normalize(transform * mappedNormal);
 }
 
-Sphere sphereAt(inout uint iShapeValue) {
-    Sphere s;
-    s.position      = vec3(shapeValues[iShapeValue++], shapeValues[iShapeValue++], shapeValues[iShapeValue++]);
-    s.radius        = shapeValues[iShapeValue++];
-    s.materialIndex = uint(shapeValues[iShapeValue++]);
-    return s;
-}
-
 // Ray tracing ---------------------------------------------------------------------------------------------------------
 
 vec4 trace(Ray ray);
 
 bool hitShape(in Ray ray, out Hit hit);
-bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out Hit hit);
 bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax, out Hit hit);
 bool hitMesh(in Ray ray, in MeshMeta meshMeta, float distMin, float distMax, out Hit hit);
 
@@ -234,17 +219,6 @@ bool hitShape(in Ray ray, out Hit hit) {
     const float minDistance = EPSILON;
     float maxDistance = FLOAT_MAX;
 
-    int nSpheres = int(shapeValues[iShapeValue++]);
-    for (int i = 0; i < nSpheres; ++i) {
-        Hit tempHit;
-        Sphere sphere = sphereAt(iShapeValue);
-        if (hitSphere(ray, sphere, minDistance, maxDistance, tempHit)) {
-            hitOccured = true;
-            maxDistance = tempHit.distance;
-            hit = tempHit;
-        }
-    }
-
     int nMeshes = int(meshValues[0]);
     for (int i = 0; i < nMeshes; ++i) {
         Hit tempHit;
@@ -257,42 +231,6 @@ bool hitShape(in Ray ray, out Hit hit) {
     }
 
     return hitOccured;
-}
-
-bool hitSphere(in Ray ray, in Sphere sphere, float distMin, float distMax, out Hit hit) {
-    vec3 rs = ray.position - sphere.position;
-    float a = dot(ray.direction, ray.direction);
-    float b = dot(rs, ray.direction);
-    float c = dot(rs, rs) - (sphere.radius * sphere.radius);
-
-    float discriminant = (b * b) - (a * c);
-    if (discriminant < 0.f) {
-        return false;
-    }
-
-    float sqrtDis = sqrt(discriminant);
-    float aInv = 1.f / a;
-
-    float root = (-b - sqrtDis) * aInv;
-    if (root < distMin || root > distMax) {
-        root = (-b + sqrtDis) * aInv;
-        if (root < distMin || root > distMax) {
-            return false;
-        }
-    }
-
-    vec3 hitPosition = pointOnRay(ray, root);
-    vec3 normal = (hitPosition - sphere.position) / sphere.radius;
-    float dotRayNorm = dot(ray.direction, normal);
-
-    hit.distance = root;
-    hit.position = hitPosition;
-    hit.normal = normal * -sign(dotRayNorm);
-    hit.incidental = ray.direction;
-    hit.texCoords = mappingOnUnitSphere(normal);
-    hit.materialIndex = sphere.materialIndex;
-    hit.bFrontFace = dotRayNorm < 0.f;
-    return true;
 }
 
 bool hitMesh(in Ray ray, in MeshMeta meshMeta, float distMin, float distMax, out Hit hit) {
