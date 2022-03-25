@@ -1,7 +1,7 @@
 use nalgebra_glm as glm;
 use serde_json as json;
 
-pub fn to_vec3(value: &json::Value) -> glm::TVec3<f32> {
+pub fn to_vec3(value: &json::Value) -> glm::Vec3 {
     let coords: Vec<f32> = value
         .as_array()
         .unwrap()
@@ -11,7 +11,7 @@ pub fn to_vec3(value: &json::Value) -> glm::TVec3<f32> {
     glm::make_vec3(&coords)
 }
 
-pub fn to_vec2(value: &json::Value) -> glm::TVec2<f32> {
+pub fn to_vec2(value: &json::Value) -> glm::Vec2 {
     let coords: Vec<f32> = value
         .as_array()
         .unwrap()

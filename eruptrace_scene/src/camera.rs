@@ -4,9 +4,9 @@ use serde_json as js;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Camera {
-    pub position: glm::TVec3<f32>,
-    pub look_at: glm::TVec3<f32>,
-    pub up: glm::TVec3<f32>,
+    pub position: glm::Vec3,
+    pub look_at: glm::Vec3,
+    pub up: glm::Vec3,
     pub vertical_fov: f32,
     pub img_size: [u32; 2],
     pub samples: u32,

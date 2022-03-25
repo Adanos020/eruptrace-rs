@@ -14,7 +14,7 @@ use vk_mem_erupt as vma;
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug)]
 pub struct Vertex {
-    pub position: glm::TVec2<f32>,
+    pub position: glm::Vec2,
 }
 
 #[derive(Clone)]
