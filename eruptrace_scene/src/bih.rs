@@ -40,33 +40,22 @@ pub struct Bih(pub Vec<BihNode>);
 
 impl Bih {
     pub fn new(scene: &Scene) -> Self {
-        if scene.meshes.is_empty() {
+        if scene.triangles.is_empty() {
             Self(vec![])
         } else {
-            let triangles: Vec<_> = scene.meshes
-                .iter()
-                .enumerate()
-                .flat_map(|(mi, mesh)| {
-                    mesh
-                        .triangles()
-                        .into_iter()
-                        .enumerate()
-                        .map(move |(ti, triangle)| (mi, ti, triangle))
-                })
-                .collect();
-            let bounds = calculate_bounds(&triangles);
-            let mut nodes = Vec::with_capacity(2 * triangles.len());
-            make_hierarchy(&triangles, &triangles, bounds, 0, &mut nodes);
+            let bounds = calculate_bounds(&scene.triangles);
+            let mut nodes = Vec::with_capacity(2 * scene.triangles.len());
+            make_hierarchy(&scene.triangles, &scene.triangles, bounds, 0, &mut nodes);
             nodes.shrink_to_fit();
             Self(nodes)
         }
     }
 }
 
-fn calculate_bounds(triangles: &[(usize, usize, Triangle)]) -> BoundingBox {
+fn calculate_bounds(triangles: &[Triangle]) -> BoundingBox {
     triangles
         .iter()
-        .map(|(_, _, triangle)| triangle.bounds())
+        .map(Triangle::bounds)
         .fold(
             BoundingBox {
                 min: glm::vec3(f32::MAX, f32::MAX, f32::MAX),
@@ -88,8 +77,8 @@ fn calculate_bounds(triangles: &[(usize, usize, Triangle)]) -> BoundingBox {
 }
 
 fn make_hierarchy(
-    triangles_part: &[(usize, usize, Triangle)],
-    triangles: &[(usize, usize, Triangle)],
+    triangles_part: &[Triangle],
+    triangles: &[Triangle],
     bounds: BoundingBox,
     current: usize,
     out_nodes: &mut Vec<BihNode>,

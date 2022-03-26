@@ -6,7 +6,7 @@ use eruptrace_vk::contexts::{PipelineContext, RenderContext};
 use eruptrace_vk::{shader::make_shader_module, AllocatedBuffer, VulkanContext};
 use nalgebra_glm as glm;
 use std::{
-    ffi::CString,
+    ffi::{CString, c_void},
     sync::{Arc, RwLock},
 };
 use vk_mem_erupt as vma;
@@ -20,6 +20,7 @@ pub struct Vertex {
 #[derive(Clone)]
 pub struct RenderSurface {
     vertex_buffer: AllocatedBuffer<Vertex>,
+    n_triangles: u32,
 
     vertex_shader: vk::ShaderModule,
     fragment_shader: vk::ShaderModule,
@@ -69,11 +70,6 @@ impl RenderSurface {
                     .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 vk::DescriptorSetLayoutBindingBuilder::new()
                     .binding(5)
-                    .descriptor_count(1)
-                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-                vk::DescriptorSetLayoutBindingBuilder::new()
-                    .binding(6)
                     .descriptor_count(1)
                     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                     .stage_flags(vk::ShaderStageFlags::FRAGMENT),
@@ -167,10 +163,7 @@ impl RenderSurface {
             //     .buffer(scene_buffers.bih_buffer.buffer)
             //     .range(vk::WHOLE_SIZE),
             vk::DescriptorBufferInfoBuilder::new()
-                .buffer(scene_buffers.mesh_metas_buffer.buffer)
-                .range(vk::WHOLE_SIZE),
-            vk::DescriptorBufferInfoBuilder::new()
-                .buffer(scene_buffers.mesh_data_buffer.buffer)
+                .buffer(scene_buffers.triangles_buffer.buffer)
                 .range(vk::WHOLE_SIZE),
         ];
 
@@ -248,9 +241,16 @@ impl RenderSurface {
         let mut pipeline_rendering_info = vk::PipelineRenderingCreateInfoBuilder::new()
             .color_attachment_formats(std::slice::from_ref(&pipeline_ctx.surface_format.format));
 
+        let push_constants = vec![vk::PushConstantRangeBuilder::new()
+            .offset(0)
+            .size(std::mem::size_of::<u32>() as u32)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
+
         let graphics_pipeline_layout = {
             let create_info =
-                vk::PipelineLayoutCreateInfoBuilder::new().set_layouts(&descriptor_set_layouts);
+                vk::PipelineLayoutCreateInfoBuilder::new()
+                    .set_layouts(&descriptor_set_layouts)
+                    .push_constant_ranges(&push_constants);
             unsafe {
                 vk_ctx
                     .device
@@ -332,6 +332,7 @@ impl RenderSurface {
 
         Self {
             vertex_buffer,
+            n_triangles: scene_buffers.n_triangles,
             vertex_shader,
             fragment_shader,
             graphics_pipeline_layout,
@@ -372,6 +373,14 @@ impl RenderSurface {
                 0,
                 &self.descriptor_sets,
                 &[],
+            );
+            ctx.device.cmd_push_constants(
+                ctx.command_buffer,
+                self.graphics_pipeline_layout,
+                vk::ShaderStageFlags::FRAGMENT,
+                0,
+                std::mem::size_of::<u32>() as u32,
+                &self.n_triangles as *const u32 as *const c_void,
             );
             ctx.device.cmd_bind_vertex_buffers(
                 ctx.command_buffer,

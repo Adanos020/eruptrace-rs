@@ -10,9 +10,10 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use itertools::Itertools;
 
 pub struct Scene {
-    pub meshes: Vec<Mesh>,
+    pub triangles: Vec<Triangle>,
     pub materials: Vec<Material>,
     pub texture_paths: Vec<PathBuf>,
     pub normal_map_paths: Vec<PathBuf>,
@@ -75,16 +76,18 @@ impl Scene {
                 (names, materials)
             };
 
-            let meshes = scene_json["meshes"]
+            let triangles = scene_json["meshes"]
                 .as_array()
                 .map_or(&vec![], |v| v)
                 .iter()
                 .filter(|m| m.is_object())
-                .map(|m| Mesh::from_json(m, &material_names).unwrap())
+                .map(|m| Mesh::from_json(m, &material_names))
+                .filter_map(|m| if let Ok(m) = m { Some(m.triangles()) } else { None })
+                .flatten()
                 .collect();
 
             Self {
-                meshes,
+                triangles,
                 materials,
                 texture_paths,
                 normal_map_paths,

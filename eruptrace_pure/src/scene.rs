@@ -1,7 +1,7 @@
 #![allow(clippy::no_effect)]
 
 use erupt::{vk, DeviceLoader};
-use eruptrace_scene::{materials::Material, mesh::Mesh, Scene};
+use eruptrace_scene::{materials::Material, Scene};
 use eruptrace_vk::{AllocatedBuffer, AllocatedImage, VulkanContext};
 use image::EncodableLayout;
 use std::{
@@ -10,14 +10,15 @@ use std::{
 };
 use std140::*;
 use vk_mem_erupt as vma;
+use eruptrace_scene::mesh::Triangle;
 
 #[derive(Clone)]
 pub struct SceneBuffers {
     pub textures_image: AllocatedImage,
     pub normal_maps_image: AllocatedImage,
     pub materials_buffer: AllocatedBuffer<MaterialStd140>,
-    pub mesh_metas_buffer: AllocatedBuffer<MeshMetaStd140>,
-    pub mesh_data_buffer: AllocatedBuffer<f32>,
+    pub triangles_buffer: AllocatedBuffer<TriangleStd140>,
+    pub n_triangles: u32,
 }
 
 #[repr_std140]
@@ -30,14 +31,12 @@ pub struct MaterialStd140 {
 }
 
 #[repr_std140]
-#[derive(Copy, Clone, Debug)]
-pub struct MeshMetaStd140 {
+#[derive(Clone, Debug)]
+pub struct TriangleStd140 {
+    pub positions: array<vec3, 3>,
+    pub normals: array<vec3, 3>,
+    pub texcoords: array<vec2, 3>,
     pub material_index: uint,
-    pub positions_start: uint,
-    pub normals_start: uint,
-    pub texcoords_start: uint,
-    pub indices_start: uint,
-    pub mesh_end: uint,
 }
 
 impl SceneBuffers {
@@ -48,10 +47,11 @@ impl SceneBuffers {
     ) -> vma::Result<Self> {
         let n_textures = scene.texture_paths.len();
         let n_normal_maps = scene.normal_map_paths.len();
+        let n_triangles = scene.triangles.len() as u32;
         let textures = get_image_data(scene.texture_paths);
         let normal_maps = get_image_data(scene.normal_map_paths);
         let materials = get_material_data(scene.materials);
-        let (mesh_metas, mesh_data) = get_mesh_data(scene.meshes);
+        let triangles = get_triangle_data(scene.triangles);
 
         let image_extent = vk::Extent3D {
             width: 1024,
@@ -96,18 +96,13 @@ impl SceneBuffers {
                 buffer_allocation_info.clone(),
                 &materials,
             )?,
-            mesh_metas_buffer: AllocatedBuffer::with_data(
-                allocator.clone(),
-                &buffer_info,
-                buffer_allocation_info.clone(),
-                &mesh_metas,
-            )?,
-            mesh_data_buffer: AllocatedBuffer::with_data(
+            triangles_buffer: AllocatedBuffer::with_data(
                 allocator,
                 &buffer_info,
                 buffer_allocation_info,
-                &mesh_data,
+                &triangles,
             )?,
+            n_triangles,
         })
     }
 
@@ -115,8 +110,7 @@ impl SceneBuffers {
         self.textures_image.destroy(device);
         self.normal_maps_image.destroy(device);
         self.materials_buffer.destroy();
-        self.mesh_metas_buffer.destroy();
-        self.mesh_data_buffer.destroy();
+        self.triangles_buffer.destroy();
     }
 }
 
@@ -138,55 +132,26 @@ fn get_material_data(materials: Vec<Material>) -> Vec<MaterialStd140> {
     materials.into_iter().map(to_std140).collect()
 }
 
-fn get_mesh_data(meshes: Vec<Mesh>) -> (Vec<MeshMetaStd140>, Vec<f32>) {
-    let mut metas = Vec::with_capacity(meshes.len());
-    let mut data = Vec::with_capacity(1 + meshes.iter().map(|m| m.size_in_f32s()).sum::<usize>());
-    let mut curr_mesh_start = 1u32;
-
-    // Number of meshes
-    data.push(meshes.len() as f32);
-    for mesh in meshes.into_iter() {
-        let positions_size = mesh.positions.len() * 3;
-        let normals_size = mesh.normals.len() * 3;
-        let texcoords_size = mesh.texcoords.len() * 2;
-        let indices_size = mesh.indices.len();
-
-        let material_index = uint(mesh.material_index);
-        let positions_start = uint(curr_mesh_start);
-        let normals_start = uint(positions_start.0 + positions_size as u32);
-        let texcoords_start = uint(normals_start.0 + normals_size as u32);
-        let indices_start = uint(texcoords_start.0 + texcoords_size as u32);
-        let mesh_end = uint(indices_start.0 + indices_size as u32);
-
-        metas.push(MeshMetaStd140 {
-            material_index,
-            positions_start,
-            normals_start,
-            texcoords_start,
-            indices_start,
-            mesh_end,
-        });
-
-        for position in mesh.positions.into_iter() {
-            data.push(position.x);
-            data.push(position.y);
-            data.push(position.z);
-        }
-        for normal in mesh.normals.into_iter() {
-            data.push(normal.x);
-            data.push(normal.y);
-            data.push(normal.z);
-        }
-        for texcoord in mesh.texcoords.into_iter() {
-            data.push(texcoord.x);
-            data.push(texcoord.y);
-        }
-        for index in mesh.indices.into_iter() {
-            data.push(index as f32);
-        }
-
-        curr_mesh_start = mesh_end.0;
-    }
-
-    (metas, data)
+fn get_triangle_data(triangles: Vec<Triangle>) -> Vec<TriangleStd140> {
+    triangles
+        .into_iter()
+        .map(|t| TriangleStd140 {
+            positions: array![
+                vec3(t.positions[0][0], t.positions[0][1], t.positions[0][2]),
+                vec3(t.positions[1][0], t.positions[1][1], t.positions[1][2]),
+                vec3(t.positions[2][0], t.positions[2][1], t.positions[2][2]),
+            ],
+            normals: array![
+                vec3(t.normals[0][0], t.normals[0][1], t.normals[0][2]),
+                vec3(t.normals[1][0], t.normals[1][1], t.normals[1][2]),
+                vec3(t.normals[2][0], t.normals[2][1], t.normals[2][2]),
+            ],
+            texcoords: array![
+                vec2(t.texcoords[0][0], t.texcoords[0][1]),
+                vec2(t.texcoords[1][0], t.texcoords[1][1]),
+                vec2(t.texcoords[2][0], t.texcoords[2][1]),
+            ],
+            material_index: uint(t.material_index),
+        })
+        .collect()
 }

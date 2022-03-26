@@ -1,12 +1,14 @@
 use itertools::Itertools;
-use crate::json::{to_vec2, to_vec3};
+use crate::{bih::BoundingBox, json::{to_vec2, to_vec3}};
 use nalgebra_glm as glm;
 use serde_json as js;
-use crate::bih::BoundingBox;
 
 #[derive(Clone, Debug)]
 pub struct Triangle {
-    pub vertices: [glm::Vec3; 3],
+    pub positions: [glm::Vec3; 3],
+    pub normals: [glm::Vec3; 3],
+    pub texcoords: [glm::Vec2; 3],
+    pub material_index: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -77,13 +79,24 @@ impl Mesh {
     pub fn triangles(&self) -> Vec<Triangle> {
         self.indices
             .iter()
-            .tuple_windows::<(_, _, _)>()
+            .tuples::<(_, _, _)>()
             .map(|(&a, &b, &c)| Triangle {
-                 vertices: [
-                     self.positions[a as usize],
-                     self.positions[b as usize],
-                     self.positions[c as usize],
-                 ]
+                positions: [
+                    self.positions[a as usize],
+                    self.positions[b as usize],
+                    self.positions[c as usize],
+                ],
+                normals: [
+                    self.normals[a as usize],
+                    self.normals[b as usize],
+                    self.normals[c as usize],
+                ],
+                texcoords: [
+                    self.texcoords[a as usize],
+                    self.texcoords[b as usize],
+                    self.texcoords[c as usize],
+                ],
+                material_index: self.material_index,
             })
             .collect()
     }
@@ -91,7 +104,7 @@ impl Mesh {
 
 impl Triangle {
     pub fn bounds(&self) -> BoundingBox {
-        let [a, b, c] = self.vertices;
+        let [a, b, c] = self.positions;
         BoundingBox {
             min: glm::vec3(
                 a[0].min(b[0]).min(c[0]),
