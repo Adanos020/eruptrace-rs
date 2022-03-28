@@ -1,22 +1,25 @@
+#![feature(iter_partition_in_place)]
+#![feature(total_cmp)]
+
 pub mod bih;
 pub mod camera;
 pub mod json;
 pub mod materials;
 pub mod mesh;
 
-use crate::{camera::Camera, json::to_vec3, materials::*, mesh::*};
+use crate::{bih::Bih, camera::Camera, json::to_vec3, materials::*, mesh::*};
 use serde_json as js;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
-use itertools::Itertools;
 
 pub struct Scene {
     pub triangles: Vec<Triangle>,
     pub materials: Vec<Material>,
     pub texture_paths: Vec<PathBuf>,
     pub normal_map_paths: Vec<PathBuf>,
+    pub bih: Bih,
 }
 
 impl Scene {
@@ -76,21 +79,30 @@ impl Scene {
                 (names, materials)
             };
 
-            let triangles = scene_json["meshes"]
+            let mut triangles: Vec<_> = scene_json["meshes"]
                 .as_array()
                 .map_or(&vec![], |v| v)
                 .iter()
                 .filter(|m| m.is_object())
                 .map(|m| Mesh::from_json(m, &material_names))
-                .filter_map(|m| if let Ok(m) = m { Some(m.triangles()) } else { None })
+                .filter_map(|m| {
+                    if let Ok(m) = m {
+                        Some(m.triangles())
+                    } else {
+                        None
+                    }
+                })
                 .flatten()
                 .collect();
+
+            let bih = Bih::new(&mut triangles);
 
             Self {
                 triangles,
                 materials,
                 texture_paths,
                 normal_map_paths,
+                bih,
             }
         };
 

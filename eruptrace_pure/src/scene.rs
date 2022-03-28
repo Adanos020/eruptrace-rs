@@ -1,6 +1,7 @@
 #![allow(clippy::no_effect)]
 
 use erupt::{vk, DeviceLoader};
+use eruptrace_scene::mesh::Triangle;
 use eruptrace_scene::{materials::Material, Scene};
 use eruptrace_vk::{AllocatedBuffer, AllocatedImage, VulkanContext};
 use image::EncodableLayout;
@@ -10,7 +11,6 @@ use std::{
 };
 use std140::*;
 use vk_mem_erupt as vma;
-use eruptrace_scene::mesh::Triangle;
 
 #[derive(Clone)]
 pub struct SceneBuffers {

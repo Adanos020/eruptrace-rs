@@ -1,5 +1,8 @@
+use crate::{
+    bih::BoundingBox,
+    json::{to_vec2, to_vec3},
+};
 use itertools::Itertools;
-use crate::{bih::BoundingBox, json::{to_vec2, to_vec3}};
 use nalgebra_glm as glm;
 use serde_json as js;
 

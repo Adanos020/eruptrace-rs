@@ -1,6 +1,8 @@
 use erupt::vk;
 use std::ffi::{c_void, CStr};
 
+/// # Safety
+/// lol what
 pub unsafe extern "system" fn debug_callback(
     severity: vk::DebugUtilsMessageSeverityFlagBitsEXT,
     _types: vk::DebugUtilsMessageTypeFlagsEXT,

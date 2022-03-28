@@ -6,7 +6,7 @@ use eruptrace_vk::contexts::{PipelineContext, RenderContext};
 use eruptrace_vk::{shader::make_shader_module, AllocatedBuffer, VulkanContext};
 use nalgebra_glm as glm;
 use std::{
-    ffi::{CString, c_void},
+    ffi::{c_void, CString},
     sync::{Arc, RwLock},
 };
 use vk_mem_erupt as vma;
@@ -247,10 +247,9 @@ impl RenderSurface {
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
 
         let graphics_pipeline_layout = {
-            let create_info =
-                vk::PipelineLayoutCreateInfoBuilder::new()
-                    .set_layouts(&descriptor_set_layouts)
-                    .push_constant_ranges(&push_constants);
+            let create_info = vk::PipelineLayoutCreateInfoBuilder::new()
+                .set_layouts(&descriptor_set_layouts)
+                .push_constant_ranges(&push_constants);
             unsafe {
                 vk_ctx
                     .device
