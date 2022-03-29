@@ -1,8 +1,7 @@
 #![allow(clippy::no_effect)]
 
 use erupt::{vk, DeviceLoader};
-use eruptrace_scene::mesh::Triangle;
-use eruptrace_scene::{materials::Material, Scene};
+use eruptrace_scene::{materials::Material, mesh::Triangle, Scene};
 use eruptrace_vk::{AllocatedBuffer, AllocatedImage, VulkanContext};
 use image::EncodableLayout;
 use std::{
@@ -11,6 +10,7 @@ use std::{
 };
 use std140::*;
 use vk_mem_erupt as vma;
+use eruptrace_scene::bih::{Bih, BihNodeData};
 
 #[derive(Clone)]
 pub struct SceneBuffers {
@@ -18,6 +18,7 @@ pub struct SceneBuffers {
     pub normal_maps_image: AllocatedImage,
     pub materials_buffer: AllocatedBuffer<MaterialStd140>,
     pub triangles_buffer: AllocatedBuffer<TriangleStd140>,
+    pub bih_buffer: AllocatedBuffer<BihNodeStd140>,
     pub n_triangles: u32,
 }
 
@@ -28,6 +29,16 @@ pub struct MaterialStd140 {
     pub texture_index: uint,
     pub normal_map_index: uint,
     pub parameter: float,
+}
+
+#[repr_std140]
+#[derive(Copy, Clone, Debug)]
+pub struct BihNodeStd140 {
+    pub node_type: uint,
+    pub child_left: uint,
+    pub child_right: uint,
+    pub clip_left: float,
+    pub clip_right: float,
 }
 
 #[repr_std140]
@@ -52,6 +63,7 @@ impl SceneBuffers {
         let normal_maps = get_image_data(scene.normal_map_paths);
         let materials = get_material_data(scene.materials);
         let triangles = get_triangle_data(scene.triangles);
+        let bih = get_bih_data(scene.bih);
 
         let image_extent = vk::Extent3D {
             width: 1024,
@@ -97,10 +109,16 @@ impl SceneBuffers {
                 &materials,
             )?,
             triangles_buffer: AllocatedBuffer::with_data(
+                allocator.clone(),
+                &buffer_info,
+                buffer_allocation_info.clone(),
+                &triangles,
+            )?,
+            bih_buffer: AllocatedBuffer::with_data(
                 allocator,
                 &buffer_info,
                 buffer_allocation_info,
-                &triangles,
+                &bih,
             )?,
             n_triangles,
         })
@@ -111,6 +129,7 @@ impl SceneBuffers {
         self.normal_maps_image.destroy(device);
         self.materials_buffer.destroy();
         self.triangles_buffer.destroy();
+        self.bih_buffer.destroy();
     }
 }
 
@@ -152,6 +171,28 @@ fn get_triangle_data(triangles: Vec<Triangle>) -> Vec<TriangleStd140> {
                 vec2(t.texcoords[2][0], t.texcoords[2][1]),
             ],
             material_index: uint(t.material_index),
+        })
+        .collect()
+}
+
+fn get_bih_data(bih: Bih) -> Vec<BihNodeStd140> {
+    bih.0
+        .into_iter()
+        .map(|node| match node.data {
+            BihNodeData::Branch { clip_left, clip_right, child_left, child_right } => BihNodeStd140 {
+                node_type: uint(node.ty as u32),
+                child_left: uint(child_left as u32),
+                child_right: uint(child_right as u32),
+                clip_left: float(clip_left),
+                clip_right: float(clip_right),
+            },
+            BihNodeData::Leaf { triangle_index, count } => BihNodeStd140 {
+                node_type: uint(node.ty as u32),
+                child_left: uint(triangle_index as u32),
+                child_right: uint(count as u32),
+                clip_left: float(0.0),
+                clip_right: float(0.0),
+            },
         })
         .collect()
 }

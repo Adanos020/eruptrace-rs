@@ -13,24 +13,26 @@ const float HALF_PI = 0.5f * PI;
 const float ONE_OVER_PI = 1.f / PI;
 const float ONE_OVER_TWO_PI = 1.f / (2.f * PI);
 
-// Material types ------------------------------------------------------------------------------------------------------
+// Types ---------------------------------------------------------------------------------------------------------------
 
 const uint MATERIAL_DIFFUSIVE = 0;
 const uint MATERIAL_REFLECTIVE = 1;
 const uint MATERIAL_REFRACTIVE = 2;
 const uint MATERIAL_EMITTING = 3;
 
+const uint BIH_BRANCH_X = 0;
+const uint BIH_BRANCH_Y = 1;
+const uint BIH_BRANCH_Z = 2;
+const uint BIH_LEAF = 3;
+
 // Structs -------------------------------------------------------------------------------------------------------------
 
-struct Camera {
-    vec4 position;
-    vec4 horizontal;
-    vec4 vertical;
-    vec4 bottomLeft;
-    vec2 imgSize;
-    vec2 imgSizeInv;
-    uint samples;
-    uint maxReflections;
+struct BihNode {
+    uint nodeType;
+    uint childLeft;
+    uint childRight;
+    float clipLeft;
+    float clipRight;
 };
 
 struct Triangle {
@@ -74,11 +76,18 @@ layout(location = 0) out vec4 fragColour;
 layout(set = 0, binding = 0) uniform sampler2DArray textures;
 layout(set = 0, binding = 1) uniform sampler2DArray normalMaps;
 layout(set = 0, binding = 2) uniform CameraUniform {
-    Camera camera;
+    vec4 position;
+    vec4 horizontal;
+    vec4 vertical;
+    vec4 bottomLeft;
+    vec2 imgSize;
+    vec2 imgSizeInv;
+    uint samples;
+    uint maxReflections;
+} camera;
+layout(set = 0, binding = 3, std140) readonly buffer BIH {
+    BihNode bihNodes[];
 };
-//layout(set = 0, binding = 3, std140) readonly buffer BIH {
-//    // BIH
-//};
 layout(set = 0, binding = 4, std140) readonly buffer MaterialData {
     Material materials[];
 };
@@ -88,6 +97,7 @@ layout(set = 0, binding = 5, std140) readonly buffer TriangleData {
 
 layout(push_constant) uniform Constants {
     uint nTriangles;
+    bool bUseBih;
 };
 
 // Utils ---------------------------------------------------------------------------------------------------------------
@@ -151,7 +161,8 @@ vec3 mapNormal(vec3 worldNormal, vec3 mappedNormal) {
 
 vec4 trace(Ray ray);
 
-bool hitShape(in Ray ray, out Hit hit);
+bool hitShapeBih(in Ray ray, out Hit hit);
+bool hitShapeBruteforce(in Ray ray, out Hit hit);
 bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax, out Hit hit);
 
 bool scatter(Hit hit, out Scattering scattering);
@@ -178,7 +189,7 @@ vec4 trace(Ray ray) {
     vec4 finalColor = vec4(1.f);
     for (int iReflection = 0; iReflection < camera.maxReflections; ++iReflection) {
         Hit hit;
-        if (hitShape(ray, hit)) {
+        if (bUseBih ? hitShapeBih(ray, hit) : hitShapeBruteforce(ray, hit)) {
             Scattering scattering;
             if (scatter(hit, scattering)) {
                 // Scattering
@@ -199,7 +210,12 @@ vec4 trace(Ray ray) {
     return finalColor;
 }
 
-bool hitShape(in Ray ray, out Hit hit) {
+bool hitShapeBih(in Ray ray, out Hit hit) {
+    bihNodes[0]; // This is just so glslc doesn't delete the binding.
+    return false;
+}
+
+bool hitShapeBruteforce(in Ray ray, out Hit hit) {
     bool hitOccured = false;
     uint iShapeValue = 0;
     const float minDistance = EPSILON;

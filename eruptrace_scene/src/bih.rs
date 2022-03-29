@@ -32,8 +32,8 @@ pub enum BihNodeType {
 
 #[derive(Copy, Clone, Debug)]
 pub struct BihNode {
-    ty: BihNodeType,
-    data: BihNodeData,
+    pub ty: BihNodeType,
+    pub data: BihNodeData,
 }
 
 #[derive(Clone, Debug)]

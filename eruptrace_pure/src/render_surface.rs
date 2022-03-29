@@ -1,14 +1,21 @@
-use crate::scene::SceneBuffers;
-use crate::shaders::*;
-use crate::CameraUniform;
+use crate::{
+    scene::SceneBuffers,
+    shaders::*,
+    CameraUniform,
+};
 use erupt::{vk, DeviceLoader, ExtendableFrom, SmallVec};
-use eruptrace_vk::contexts::{PipelineContext, RenderContext};
-use eruptrace_vk::{shader::make_shader_module, AllocatedBuffer, VulkanContext};
+use eruptrace_vk::{
+    contexts::{PipelineContext, RenderContext},
+    shader::make_shader_module,
+    AllocatedBuffer,
+    VulkanContext,
+};
 use nalgebra_glm as glm;
 use std::{
     ffi::{c_void, CString},
     sync::{Arc, RwLock},
 };
+use std140::*;
 use vk_mem_erupt as vma;
 
 #[repr(C)]
@@ -17,10 +24,17 @@ pub struct Vertex {
     pub position: glm::Vec2,
 }
 
+#[repr_std140]
+#[derive(Copy, Clone, Debug)]
+struct PushConstants {
+    n_triangles: uint,
+    use_bih: boolean,
+}
+
 #[derive(Clone)]
 pub struct RenderSurface {
     vertex_buffer: AllocatedBuffer<Vertex>,
-    n_triangles: u32,
+    push_constants: PushConstants,
 
     vertex_shader: vk::ShaderModule,
     fragment_shader: vk::ShaderModule,
@@ -58,11 +72,11 @@ impl RenderSurface {
                     .descriptor_count(1)
                     .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                     .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-                // vk::DescriptorSetLayoutBindingBuilder::new()
-                //     .binding(3)
-                //     .descriptor_count(1)
-                //     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                //     .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                vk::DescriptorSetLayoutBindingBuilder::new()
+                    .binding(3)
+                    .descriptor_count(1)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 vk::DescriptorSetLayoutBindingBuilder::new()
                     .binding(4)
                     .descriptor_count(1)
@@ -157,11 +171,11 @@ impl RenderSurface {
 
         let storage_buffer_infos = vec![
             vk::DescriptorBufferInfoBuilder::new()
+                .buffer(scene_buffers.bih_buffer.buffer)
+                .range(vk::WHOLE_SIZE),
+            vk::DescriptorBufferInfoBuilder::new()
                 .buffer(scene_buffers.materials_buffer.buffer)
                 .range(vk::WHOLE_SIZE),
-            // vk::DescriptorBufferInfoBuilder::new()
-            //     .buffer(scene_buffers.bih_buffer.buffer)
-            //     .range(vk::WHOLE_SIZE),
             vk::DescriptorBufferInfoBuilder::new()
                 .buffer(scene_buffers.triangles_buffer.buffer)
                 .range(vk::WHOLE_SIZE),
@@ -179,7 +193,7 @@ impl RenderSurface {
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .buffer_info(&uniform_buffer_infos),
             vk::WriteDescriptorSetBuilder::new()
-                .dst_binding(4) // TODO change back to 3
+                .dst_binding(3)
                 .dst_set(descriptor_sets[0])
                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                 .buffer_info(&storage_buffer_infos),
@@ -243,7 +257,7 @@ impl RenderSurface {
 
         let push_constants = vec![vk::PushConstantRangeBuilder::new()
             .offset(0)
-            .size(std::mem::size_of::<u32>() as u32)
+            .size(std::mem::size_of::<PushConstants>() as u32)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
 
         let graphics_pipeline_layout = {
@@ -331,7 +345,10 @@ impl RenderSurface {
 
         Self {
             vertex_buffer,
-            n_triangles: scene_buffers.n_triangles,
+            push_constants: PushConstants {
+                n_triangles: uint(scene_buffers.n_triangles),
+                use_bih: boolean::False,
+            },
             vertex_shader,
             fragment_shader,
             graphics_pipeline_layout,
@@ -378,8 +395,8 @@ impl RenderSurface {
                 self.graphics_pipeline_layout,
                 vk::ShaderStageFlags::FRAGMENT,
                 0,
-                std::mem::size_of::<u32>() as u32,
-                &self.n_triangles as *const u32 as *const c_void,
+                std::mem::size_of::<PushConstants>() as u32,
+                &self.push_constants as *const PushConstants as *const c_void,
             );
             ctx.device.cmd_bind_vertex_buffers(
                 ctx.command_buffer,
