@@ -46,6 +46,8 @@ enum Split {
         middle: usize,
         left_box: BoundingBox,
         right_box: BoundingBox,
+        clip_left: f32,
+        clip_right: f32,
     },
 }
 
@@ -69,17 +71,15 @@ impl Default for BihNode {
 
 impl Bih {
     pub fn new(triangles: &mut [Triangle]) -> Self {
-        if triangles.is_empty() {
-            Self(vec![])
-        } else {
+        let mut nodes = vec![BihNode::default()];
+        if !triangles.is_empty() {
             let all_triangles_addr = triangles.as_ptr() as usize;
             let bounds = calculate_bounds(triangles);
-            let mut nodes = vec![BihNode::default()];
             nodes.reserve(2 * triangles.len());
             make_hierarchy(triangles, all_triangles_addr, bounds, 0, &mut nodes);
             nodes.shrink_to_fit();
-            Self(nodes)
         }
+        Self(nodes)
     }
 }
 
@@ -118,6 +118,8 @@ fn make_hierarchy(
                 middle,
                 left_box,
                 right_box,
+                clip_left,
+                clip_right,
             } => {
                 out_nodes.push(BihNode::default());
                 out_nodes.push(BihNode::default());
@@ -127,8 +129,8 @@ fn make_hierarchy(
 
                 out_nodes[current].ty = ty;
                 out_nodes[current].data = BihNodeData::Branch {
-                    clip_left: left_box.max[ty as usize],
-                    clip_right: right_box.min[ty as usize],
+                    clip_left,
+                    clip_right,
                     child_left,
                     child_right,
                 };
@@ -167,6 +169,18 @@ fn split(triangles_part: &mut [Triangle], current_box: BoundingBox) -> Split {
                 t.bounds().centre()[axis_idx] < current_box.centre()[axis_idx]
             });
             if middle > 0 && middle < triangles_part.len() - 1 {
+                let max_left = triangles_part[..middle]
+                    .iter()
+                    .max_by(|t1, t2| {
+                        t1.bounds().max[axis_idx].total_cmp(&t2.bounds().max[axis_idx])
+                    })
+                    .unwrap();
+                let min_right = triangles_part[middle..]
+                    .iter()
+                    .min_by(|t1, t2| {
+                        t1.bounds().min[axis_idx].total_cmp(&t2.bounds().min[axis_idx])
+                    })
+                    .unwrap();
                 return Split::Axis {
                     ty: match axis_idx {
                         0 => BihNodeType::X,
@@ -177,28 +191,16 @@ fn split(triangles_part: &mut [Triangle], current_box: BoundingBox) -> Split {
                     middle,
                     left_box: {
                         let mut bounds = current_box;
-                        bounds.max[axis_idx] = triangles_part[..middle]
-                            .iter()
-                            .max_by(|t1, t2| {
-                                t1.bounds().max[axis_idx].total_cmp(&t2.bounds().max[axis_idx])
-                            })
-                            .unwrap()
-                            .bounds()
-                            .min[axis_idx];
+                        bounds.max[axis_idx] = max_left.bounds().min[axis_idx];
                         bounds
                     },
                     right_box: {
                         let mut bounds = current_box;
-                        bounds.min[axis_idx] = triangles_part[middle..]
-                            .iter()
-                            .min_by(|t1, t2| {
-                                t1.bounds().min[axis_idx].total_cmp(&t2.bounds().min[axis_idx])
-                            })
-                            .unwrap()
-                            .bounds()
-                            .max[axis_idx];
+                        bounds.min[axis_idx] = min_right.bounds().max[axis_idx];
                         bounds
                     },
+                    clip_left: max_left.bounds().max[axis_idx],
+                    clip_right: min_right.bounds().min[axis_idx],
                 };
             }
             axis_idx = (axis_idx + 1) % 3;

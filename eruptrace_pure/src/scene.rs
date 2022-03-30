@@ -1,6 +1,7 @@
 #![allow(clippy::no_effect)]
 
 use erupt::{vk, DeviceLoader};
+use eruptrace_scene::bih::{Bih, BihNodeData};
 use eruptrace_scene::{materials::Material, mesh::Triangle, Scene};
 use eruptrace_vk::{AllocatedBuffer, AllocatedImage, VulkanContext};
 use image::EncodableLayout;
@@ -10,7 +11,6 @@ use std::{
 };
 use std140::*;
 use vk_mem_erupt as vma;
-use eruptrace_scene::bih::{Bih, BihNodeData};
 
 #[derive(Clone)]
 pub struct SceneBuffers {
@@ -179,14 +179,22 @@ fn get_bih_data(bih: Bih) -> Vec<BihNodeStd140> {
     bih.0
         .into_iter()
         .map(|node| match node.data {
-            BihNodeData::Branch { clip_left, clip_right, child_left, child_right } => BihNodeStd140 {
+            BihNodeData::Branch {
+                clip_left,
+                clip_right,
+                child_left,
+                child_right,
+            } => BihNodeStd140 {
                 node_type: uint(node.ty as u32),
                 child_left: uint(child_left as u32),
                 child_right: uint(child_right as u32),
                 clip_left: float(clip_left),
                 clip_right: float(clip_right),
             },
-            BihNodeData::Leaf { triangle_index, count } => BihNodeStd140 {
+            BihNodeData::Leaf {
+                triangle_index,
+                count,
+            } => BihNodeStd140 {
                 node_type: uint(node.ty as u32),
                 child_left: uint(triangle_index as u32),
                 child_right: uint(count as u32),

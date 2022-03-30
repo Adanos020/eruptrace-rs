@@ -50,8 +50,9 @@ struct Material {
 };
 
 struct Ray {
-    vec3 position;
+    vec3 origin;
     vec3 direction;
+    vec3 invDirection;
 };
 
 struct Hit {
@@ -128,7 +129,7 @@ vec3 randDirection(float at) {
 }
 
 vec3 pointOnRay(in Ray ray, float distance) {
-    return ray.position + (ray.direction * distance);
+    return ray.origin + (ray.direction * distance);
 }
 
 vec2 mappingOnUnitSphere(vec3 pointOnSphere) {
@@ -173,13 +174,14 @@ bool scatterEmitting(in Hit hit, in Material mat, out Scattering scattering);
 
 void main() {
     Ray ray;
-    ray.position = camera.position.xyz;
+    ray.origin = camera.position.xyz;
     vec4 pixelColor = vec4(0.f);
     for (int i = 0; i < camera.samples; ++i) {
         float u = (gl_FragCoord.x + rand(i)) * camera.imgSizeInv.x;
         float v = (camera.imgSize.y - gl_FragCoord.y + rand(i + 0.5f)) * camera.imgSizeInv.y;
         vec4 samplePosition = camera.bottomLeft + (u * camera.horizontal) + (v * camera.vertical);
         ray.direction = samplePosition.xyz - camera.position.xyz;
+        ray.invDirection = 1.f / ray.direction;
         pixelColor += trace(ray);
     }
     fragColour = sqrt(pixelColor / float(camera.samples));
@@ -211,13 +213,79 @@ vec4 trace(Ray ray) {
 }
 
 bool hitShapeBih(in Ray ray, out Hit hit) {
-    bihNodes[0]; // This is just so glslc doesn't delete the binding.
-    return false;
+    bool hitOccured = false;
+    float minDistance = EPSILON;
+    float maxDistance = FLOAT_MAX;
+
+    struct StackEntry {
+        uint nodeIndex;
+        float minDistance;
+        float maxDistance;
+    } stack[64];
+    stack[0] = StackEntry(0, minDistance, maxDistance);
+    int entryIndex = 0;
+
+    while (entryIndex >= 0) {
+        StackEntry currEntry = stack[entryIndex--];
+        bool leafHit = true;
+
+        // Traverse tree
+        while (bihNodes[currEntry.nodeIndex].nodeType != BIH_LEAF) {
+            uint axis = bihNodes[currEntry.nodeIndex].nodeType;
+            vec2 distancesToPlanes = vec2(bihNodes[currEntry.nodeIndex].clipLeft, bihNodes[currEntry.nodeIndex].clipRight);
+            distancesToPlanes = (distancesToPlanes - ray.origin[axis]) * ray.invDirection[axis];
+
+            uint node1 = uint(ray.direction[axis] < 0);
+            uint node2 = 1 - node1;
+
+            float dist1 = distancesToPlanes[node1];
+            float dist2 = distancesToPlanes[node2];
+
+            bool hit1Occurred = dist1 >= currEntry.minDistance;
+            bool hit2Occurred = dist2 <= currEntry.maxDistance;
+
+            uint children[2] = uint[](
+                bihNodes[currEntry.nodeIndex].childLeft,
+                bihNodes[currEntry.nodeIndex].childRight
+            );
+
+            if (hit1Occurred) {
+                currEntry.nodeIndex = children[node1];
+                currEntry.maxDistance = min(currEntry.maxDistance, dist1);
+                if (hit2Occurred) {
+                    stack[++entryIndex].nodeIndex = children[node2];
+                    stack[entryIndex].minDistance = max(currEntry.minDistance, dist2);
+                    stack[entryIndex].maxDistance = currEntry.maxDistance;
+                }
+            } else if (hit2Occurred) {
+                currEntry.nodeIndex = children[node2];
+                currEntry.maxDistance = max(currEntry.minDistance, dist2);
+            } else {
+                leafHit = false;
+                break;
+            }
+        }
+
+        // Ray-triangle intersection
+        if (leafHit) {
+            uint triangleIndex = bihNodes[currEntry.nodeIndex].childLeft;
+            uint triangleCount = bihNodes[currEntry.nodeIndex].childRight;
+            for (uint i = triangleIndex; i < triangleIndex + triangleCount; ++i) {
+                Hit tempHit;
+                if (hitTriangle(ray, triangles[i], minDistance, maxDistance, tempHit)) {
+                    hitOccured = true;
+                    maxDistance = tempHit.distance;
+                    hit = tempHit;
+                }
+            }
+        }
+    }
+
+    return hitOccured;
 }
 
 bool hitShapeBruteforce(in Ray ray, out Hit hit) {
     bool hitOccured = false;
-    uint iShapeValue = 0;
     const float minDistance = EPSILON;
     float maxDistance = FLOAT_MAX;
 
@@ -245,7 +313,7 @@ bool hitTriangle(in Ray ray, in Triangle triangle, float distMin, float distMax,
     }
 
     float determinantInv = 1.f / determinant;
-    vec3 t = ray.position - triangle.positions[0];
+    vec3 t = ray.origin - triangle.positions[0];
     vec3 q = cross(t, edge1);
     float u = dot(t, p) * determinantInv;
     float v = dot(ray.direction, q) * determinantInv;
@@ -307,7 +375,8 @@ bool scatter(Hit hit, out Scattering scattering) {
 bool scatterDiffusive(in Hit hit, in Material material, out Scattering scattering) {
     vec3 scatterDirection = randDirection(dot(hit.position, gl_FragCoord.xyz));
     scatterDirection *= sign(dot(scatterDirection, hit.normal));
-    scattering.newRay = Ray(hit.position, normalize(scatterDirection));
+    scatterDirection = normalize(scatterDirection);
+    scattering.newRay = Ray(hit.position, scatterDirection, 1.f / scatterDirection);
     scattering.color = sampleTexture(hit.texCoords, material.textureIndex);
     return true;
 }
@@ -320,7 +389,7 @@ bool scatterReflective(in Hit hit, in Material material, out Scattering scatteri
     scatterDirection *= sign(dot(scatterDirection, hit.normal));
     if (dot(scatterDirection, hit.normal) > 0.f) {
         scattering.color = sampleTexture(hit.texCoords, material.textureIndex);
-        scattering.newRay = Ray(hit.position, scatterDirection);
+        scattering.newRay = Ray(hit.position, scatterDirection, 1.f / scatterDirection);
         return true;
     }
     return false;
@@ -346,7 +415,7 @@ bool scatterRefractive(in Hit hit, in Material material, out Scattering scatteri
     }
 
     scattering.color = sampleTexture(hit.texCoords, material.textureIndex);
-    scattering.newRay = Ray(hit.position, scatterDirection);
+    scattering.newRay = Ray(hit.position, scatterDirection, 1.f / scatterDirection);
     return true;
 }
 

@@ -1,14 +1,9 @@
-use crate::{
-    scene::SceneBuffers,
-    shaders::*,
-    CameraUniform,
-};
+use crate::{scene::SceneBuffers, shaders::*, CameraUniform};
 use erupt::{vk, DeviceLoader, ExtendableFrom, SmallVec};
 use eruptrace_vk::{
     contexts::{PipelineContext, RenderContext},
     shader::make_shader_module,
-    AllocatedBuffer,
-    VulkanContext,
+    AllocatedBuffer, VulkanContext,
 };
 use nalgebra_glm as glm;
 use std::{
@@ -347,7 +342,7 @@ impl RenderSurface {
             vertex_buffer,
             push_constants: PushConstants {
                 n_triangles: uint(scene_buffers.n_triangles),
-                use_bih: boolean::False,
+                use_bih: boolean::True,
             },
             vertex_shader,
             fragment_shader,
