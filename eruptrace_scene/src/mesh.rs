@@ -61,8 +61,9 @@ impl Mesh {
         let transform: glm::Mat4x4 = match object["transform"].as_object() {
             Some(object) => {
                 let get_transform = |name, func: &dyn Fn(&glm::Vec3) -> glm::Mat4x4| match object
-                    [name]
-                    .as_array()
+                    .get(name)
+                    .map(|a| a.as_array())
+                    .flatten()
                 {
                     Some(arr) => {
                         let vector = glm::vec3(
@@ -76,9 +77,9 @@ impl Mesh {
                 };
                 let translation = get_transform("position", &glm::translation::<f32>);
                 let rotation = get_transform("rotation", &|vec| {
-                    let rot_x = glm::rotation(vec[0], &glm::vec3(1.0, 0.0, 0.0));
-                    let rot_y = glm::rotation(vec[1], &glm::vec3(0.0, 1.0, 0.0));
-                    let rot_z = glm::rotation(vec[2], &glm::vec3(0.0, 0.0, 1.0));
+                    let rot_x = glm::rotation(vec[0].to_radians(), &glm::vec3(1.0, 0.0, 0.0));
+                    let rot_y = glm::rotation(vec[1].to_radians(), &glm::vec3(0.0, 1.0, 0.0));
+                    let rot_z = glm::rotation(vec[2].to_radians(), &glm::vec3(0.0, 0.0, 1.0));
                     rot_z * rot_y * rot_x
                 });
                 let scale = get_transform("scale", &glm::scaling::<f32>);

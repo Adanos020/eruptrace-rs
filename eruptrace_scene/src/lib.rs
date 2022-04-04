@@ -11,6 +11,7 @@ pub use camera::Camera;
 
 use crate::{bih::Bih, json::to_vec3, materials::*, mesh::*};
 use itertools::Itertools;
+use nalgebra_glm as glm;
 use serde_json as js;
 use std::{
     fs,
@@ -104,8 +105,20 @@ impl Scene {
             let mut meshes = Vec::with_capacity(meshes_and_triangles.len());
             let mut triangles = Vec::with_capacity(meshes_and_triangles.len());
             for (mesh, m_triangles) in meshes_and_triangles.into_iter() {
+                triangles.extend(m_triangles
+                    .into_iter()
+                    .map(|t| Triangle {
+                        positions: t.positions.map(|p| {
+                            (mesh.transform * glm::vec4(p.x, p.y, p.z, 1.0)).xyz()
+                        }),
+                        normals: t.normals.map(|n| {
+                            (glm::transpose(&glm::inverse(&mesh.transform)) * glm::vec4(n.x, n.y, n.z, 1.0)).xyz()
+                        }),
+                        texcoords: t.texcoords,
+                        material_index: t.material_index,
+                    })
+                );
                 meshes.push(mesh);
-                triangles.extend(m_triangles.into_iter());
             }
 
             let bih = Bih::new(&mut triangles);
