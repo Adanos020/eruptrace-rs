@@ -1,8 +1,12 @@
 #![allow(clippy::no_effect)]
 
 use erupt::{vk, DeviceLoader};
-use eruptrace_scene::bih::{Bih, BihNodeData};
-use eruptrace_scene::{materials::Material, mesh::Triangle, Scene};
+use eruptrace_scene::{
+    bih::{Bih, BihNodeData},
+    materials::Material,
+    mesh::Triangle,
+    Scene,
+};
 use eruptrace_vk::{AllocatedBuffer, AllocatedImage, VulkanContext};
 use image::EncodableLayout;
 use std::{
@@ -58,7 +62,7 @@ impl SceneBuffers {
     ) -> vma::Result<Self> {
         let n_textures = scene.texture_paths.len();
         let n_normal_maps = scene.normal_map_paths.len();
-        let n_triangles = scene.triangles.len() as u32;
+        let n_triangles = scene.meshes.len() as u32;
         let textures = get_image_data(scene.texture_paths);
         let normal_maps = get_image_data(scene.normal_map_paths);
         let materials = get_material_data(scene.materials);
@@ -156,19 +160,19 @@ fn get_triangle_data(triangles: Vec<Triangle>) -> Vec<TriangleStd140> {
         .into_iter()
         .map(|t| TriangleStd140 {
             positions: array![
-                vec3(t.positions[0][0], t.positions[0][1], t.positions[0][2]),
-                vec3(t.positions[1][0], t.positions[1][1], t.positions[1][2]),
-                vec3(t.positions[2][0], t.positions[2][1], t.positions[2][2]),
+                eruptrace_vk::std140::vec3(&t.positions[0]),
+                eruptrace_vk::std140::vec3(&t.positions[1]),
+                eruptrace_vk::std140::vec3(&t.positions[2]),
             ],
             normals: array![
-                vec3(t.normals[0][0], t.normals[0][1], t.normals[0][2]),
-                vec3(t.normals[1][0], t.normals[1][1], t.normals[1][2]),
-                vec3(t.normals[2][0], t.normals[2][1], t.normals[2][2]),
+                eruptrace_vk::std140::vec3(&t.normals[0]),
+                eruptrace_vk::std140::vec3(&t.normals[1]),
+                eruptrace_vk::std140::vec3(&t.normals[2]),
             ],
             texcoords: array![
-                vec2(t.texcoords[0][0], t.texcoords[0][1]),
-                vec2(t.texcoords[1][0], t.texcoords[1][1]),
-                vec2(t.texcoords[2][0], t.texcoords[2][1]),
+                eruptrace_vk::std140::vec2(&t.texcoords[0]),
+                eruptrace_vk::std140::vec2(&t.texcoords[1]),
+                eruptrace_vk::std140::vec2(&t.texcoords[2]),
             ],
             material_index: uint(t.material_index),
         })

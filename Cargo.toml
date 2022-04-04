@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "eruptrace_deferred",
     "eruptrace_pure",
     "eruptrace_scene",
     "eruptrace_vk",
@@ -15,6 +16,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+eruptrace_deferred = { path = "eruptrace_deferred" }
 eruptrace_pure = { path = "eruptrace_pure" }
 eruptrace_scene = { path = "eruptrace_scene" }
 eruptrace_vk = { path = "eruptrace_vk" }

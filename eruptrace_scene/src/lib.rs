@@ -7,14 +7,19 @@ pub mod json;
 pub mod materials;
 pub mod mesh;
 
-use crate::{bih::Bih, camera::Camera, json::to_vec3, materials::*, mesh::*};
+pub use camera::Camera;
+
+use crate::{bih::Bih, json::to_vec3, materials::*, mesh::*};
+use itertools::Itertools;
 use serde_json as js;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
+#[derive(Clone)]
 pub struct Scene {
+    pub meshes: Vec<Mesh>,
     pub triangles: Vec<Triangle>,
     pub materials: Vec<Material>,
     pub texture_paths: Vec<PathBuf>,
@@ -79,25 +84,34 @@ impl Scene {
                 (names, materials)
             };
 
-            let mut triangles: Vec<_> = scene_json["meshes"]
+            let meshes_and_triangles = scene_json["meshes"]
                 .as_array()
                 .map_or(&vec![], |v| v)
                 .iter()
                 .filter(|m| m.is_object())
                 .map(|m| Mesh::from_json(m, &material_names))
-                .filter_map(|m| {
-                    if let Ok(m) = m {
-                        Some(m.triangles())
-                    } else {
+                .filter_map(|m| match m {
+                    Ok(m) => {
+                        let t = m.triangles();
+                        Some((m, t))
+                    }
+                    Err(e) => {
+                        eprintln!("{}", e);
                         None
                     }
                 })
-                .flatten()
-                .collect();
+                .collect_vec();
+            let mut meshes = Vec::with_capacity(meshes_and_triangles.len());
+            let mut triangles = Vec::with_capacity(meshes_and_triangles.len());
+            for (mesh, m_triangles) in meshes_and_triangles.into_iter() {
+                meshes.push(mesh);
+                triangles.extend(m_triangles.into_iter());
+            }
 
             let bih = Bih::new(&mut triangles);
 
             Self {
+                meshes,
                 triangles,
                 materials,
                 texture_paths,

@@ -380,6 +380,7 @@ dependencies = [
  "anyhow",
  "erupt",
  "erupt-bootstrap",
+ "eruptrace_deferred",
  "eruptrace_pure",
  "eruptrace_scene",
  "eruptrace_vk",
@@ -387,6 +388,20 @@ dependencies = [
  "pico-args",
  "vk-mem-erupt",
  "winit",
+]
+
+[[package]]
+name = "eruptrace_deferred"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "erupt",
+ "eruptrace_scene",
+ "eruptrace_vk",
+ "itertools",
+ "nalgebra-glm",
+ "std140",
+ "vk-mem-erupt",
 ]
 
 [[package]]
@@ -419,6 +434,9 @@ name = "eruptrace_vk"
 version = "0.1.0"
 dependencies = [
  "erupt",
+ "nalgebra-glm",
+ "num-integer",
+ "std140",
  "vk-mem-erupt",
 ]
 

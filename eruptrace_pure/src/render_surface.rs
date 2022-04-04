@@ -96,7 +96,7 @@ impl RenderSurface {
         };
 
         let descriptor_pool = {
-            let sizes: Vec<_> = vec![
+            let sizes = vec![
                 vk::DescriptorPoolSizeBuilder::new()
                     ._type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                     .descriptor_count(10),
@@ -118,16 +118,15 @@ impl RenderSurface {
             }
         };
 
-        let descriptor_sets = {
-            let allocate_info = vk::DescriptorSetAllocateInfoBuilder::new()
-                .descriptor_pool(descriptor_pool)
-                .set_layouts(&descriptor_set_layouts);
-            unsafe {
-                vk_ctx
-                    .device
-                    .allocate_descriptor_sets(&allocate_info)
-                    .expect("Cannot allocate descriptor sets")
-            }
+        let descriptor_sets = unsafe {
+            vk_ctx
+                .device
+                .allocate_descriptor_sets(
+                    &vk::DescriptorSetAllocateInfoBuilder::new()
+                        .descriptor_pool(descriptor_pool)
+                        .set_layouts(&descriptor_set_layouts),
+                )
+                .expect("Cannot allocate descriptor sets")
         };
 
         let sampler = {
@@ -234,18 +233,16 @@ impl RenderSurface {
         let fragment_shader = make_shader_module(&vk_ctx.device, FRAGMENT_SHADER);
 
         let entry_point = CString::new("main").unwrap();
-        let shader_stages = {
-            vec![
-                vk::PipelineShaderStageCreateInfoBuilder::new()
-                    .stage(vk::ShaderStageFlagBits::VERTEX)
-                    .module(vertex_shader)
-                    .name(&entry_point),
-                vk::PipelineShaderStageCreateInfoBuilder::new()
-                    .stage(vk::ShaderStageFlagBits::FRAGMENT)
-                    .module(fragment_shader)
-                    .name(&entry_point),
-            ]
-        };
+        let shader_stages = vec![
+            vk::PipelineShaderStageCreateInfoBuilder::new()
+                .stage(vk::ShaderStageFlagBits::VERTEX)
+                .module(vertex_shader)
+                .name(&entry_point),
+            vk::PipelineShaderStageCreateInfoBuilder::new()
+                .stage(vk::ShaderStageFlagBits::FRAGMENT)
+                .module(fragment_shader)
+                .name(&entry_point),
+        ];
 
         let mut pipeline_rendering_info = vk::PipelineRenderingCreateInfoBuilder::new()
             .color_attachment_formats(std::slice::from_ref(&pipeline_ctx.surface_format.format));

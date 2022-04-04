@@ -20,6 +20,7 @@ pub struct Mesh {
     pub normals: Vec<glm::Vec3>,
     pub texcoords: Vec<glm::Vec2>,
     pub indices: Vec<u32>,
+    pub transform: glm::Mat4x4,
     pub material_index: u32,
 }
 
@@ -57,6 +58,35 @@ impl Mesh {
             .map(|p| p.as_u64().unwrap_or(0) as u32)
             .collect();
 
+        let transform: glm::Mat4x4 = match object["transform"].as_object() {
+            Some(object) => {
+                let get_transform = |name, func: &dyn Fn(&glm::Vec3) -> glm::Mat4x4| match object
+                    [name]
+                    .as_array()
+                {
+                    Some(arr) => {
+                        let vector = glm::vec3(
+                            arr[0].as_f64().unwrap() as f32,
+                            arr[1].as_f64().unwrap() as f32,
+                            arr[2].as_f64().unwrap() as f32,
+                        );
+                        func(&vector)
+                    }
+                    None => glm::identity(),
+                };
+                let translation = get_transform("position", &glm::translation::<f32>);
+                let rotation = get_transform("rotation", &|vec| {
+                    let rot_x = glm::rotation(vec[0], &glm::vec3(1.0, 0.0, 0.0));
+                    let rot_y = glm::rotation(vec[1], &glm::vec3(0.0, 1.0, 0.0));
+                    let rot_z = glm::rotation(vec[2], &glm::vec3(0.0, 0.0, 1.0));
+                    rot_z * rot_y * rot_x
+                });
+                let scale = get_transform("scale", &glm::scaling::<f32>);
+                translation * rotation * scale
+            }
+            None => glm::identity(),
+        };
+
         let material_index = material_names
             .iter()
             .position(|n| object["material"] == *n)
@@ -67,16 +97,9 @@ impl Mesh {
             normals,
             texcoords,
             indices,
+            transform,
             material_index,
         })
-    }
-
-    pub fn size_in_f32s(&self) -> usize {
-        self.positions.len() * 3
-            + self.normals.len() * 3
-            + self.texcoords.len() * 2
-            + self.indices.len()
-            + 1
     }
 
     pub fn triangles(&self) -> Vec<Triangle> {

@@ -2,6 +2,7 @@ use erupt::{
     utils::surface, vk, DeviceLoader, EntryLoader, ExtendableFrom, InstanceLoader, SmallVec,
 };
 use erupt_bootstrap as vkb;
+use eruptrace_deferred::DeferredRayTracer;
 use eruptrace_pure::PureRayTracer;
 use eruptrace_scene::{camera::Camera, Scene};
 use eruptrace_vk::{
@@ -28,6 +29,7 @@ pub struct App {
     allocator: Option<Arc<RwLock<vma::Allocator>>>,
     camera: Camera,
     pure_ray_tracer: Option<PureRayTracer>,
+    deferred_ray_tracer: Option<DeferredRayTracer>,
 }
 
 impl App {
@@ -207,8 +209,23 @@ impl App {
                 surface_format: format,
             },
             camera,
-            scene,
+            scene.clone(),
         ));
+
+        let deferred_ray_tracer = Some(DeferredRayTracer::new(
+            allocator.as_ref().unwrap().clone(),
+            VulkanContext {
+                device: device.as_ref().unwrap().clone(),
+                queue,
+                command_pool,
+                upload_fence,
+            },
+            PipelineContext {
+                surface_format: format,
+            },
+            camera,
+            scene,
+        )?);
 
         Ok(Self {
             _entry: entry,
@@ -226,6 +243,7 @@ impl App {
             allocator,
             camera,
             pure_ray_tracer,
+            deferred_ray_tracer,
         })
     }
 
@@ -233,6 +251,10 @@ impl App {
         self.swapchain.update(extent);
         self.camera.img_size = [extent.width, extent.height];
         self.pure_ray_tracer
+            .as_mut()
+            .unwrap()
+            .update_camera(self.camera);
+        self.deferred_ray_tracer
             .as_mut()
             .unwrap()
             .update_camera(self.camera);
@@ -365,7 +387,7 @@ impl App {
                 .cmd_begin_rendering(in_flight.command_buffer, &rendering_info);
         }
 
-        self.pure_ray_tracer
+        self.deferred_ray_tracer
             .as_ref()
             .unwrap()
             .render(RenderContext {
@@ -469,6 +491,10 @@ impl Drop for App {
             let prt_ref = self.pure_ray_tracer.as_ref().unwrap();
             prt_ref.destroy(self.device.as_ref().unwrap());
             self.pure_ray_tracer = None;
+
+            let drt_ref = self.deferred_ray_tracer.as_ref().unwrap();
+            drt_ref.destroy(self.device.as_ref().unwrap());
+            self.deferred_ray_tracer = None;
 
             self.device
                 .as_ref()
