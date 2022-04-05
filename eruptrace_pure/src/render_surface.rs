@@ -218,15 +218,7 @@ impl RenderSurface {
             let buffer_info = vk::BufferCreateInfoBuilder::new()
                 .usage(vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            let allocation_info = vma::AllocationCreateInfo {
-                usage: vma::MemoryUsage::CpuToGpu,
-                flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
-                    | vma::AllocationCreateFlags::MAPPED,
-                ..Default::default()
-            };
-
-            AllocatedBuffer::with_data(allocator, &buffer_info, allocation_info, &vertices)
-                .expect("Cannot create vertex buffer")
+            AllocatedBuffer::with_data(allocator, &buffer_info, vma::MemoryUsage::CpuToGpu, &vertices)
         };
 
         let vertex_shader = make_shader_module(&vk_ctx.device, VERTEX_SHADER);

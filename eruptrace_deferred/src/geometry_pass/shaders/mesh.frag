@@ -4,7 +4,10 @@ layout(location = 0) in vec3 fPosition;
 layout(location = 1) in vec3 fNormal;
 layout(location = 2) in vec2 fTexCoord;
 
-layout(location = 0) out vec4 fragColor;
+layout(location = 0) out vec4 outPosition;
+layout(location = 1) out vec4 outNormal;
+layout(location = 2) out vec2 outTexCoord;
+layout(location = 3) out uint outMaterial;
 
 struct MeshMeta {
     mat4 modlTransform;
@@ -19,7 +22,8 @@ layout(push_constant, std140) readonly uniform Constants {
 };
 
 void main() {
-    meshMetas[meshMetaIndex];
-    vec3 normal = normalize(fNormal);
-    fragColor = vec4(0.5f * (1.f + normal), 1.f);
+    outPosition = vec4(fPosition, 1.f);
+    outNormal = vec4(normalize(fNormal), 1.f);
+    outTexCoord = fTexCoord;
+    outMaterial = meshMetas[meshMetaIndex].materialIndex;
 }

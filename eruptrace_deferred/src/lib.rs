@@ -4,7 +4,7 @@ pub mod lighting_pass;
 use crate::{geometry_pass::GeometryPass, lighting_pass::LightingPass};
 use erupt::DeviceLoader;
 use eruptrace_scene::{Camera, Scene};
-use eruptrace_vk::{contexts::RenderContext, PipelineContext, VulkanContext};
+use eruptrace_vk::{PipelineContext, VulkanContext};
 use std::sync::{Arc, RwLock};
 use vk_mem_erupt as vma;
 
@@ -41,7 +41,7 @@ impl DeferredRayTracer {
         self.geometry_pass.update_camera(camera);
     }
 
-    pub fn render(&self, ctx: RenderContext) {
-        self.geometry_pass.render(ctx);
+    pub fn render(&self, vk_ctx: VulkanContext) {
+        self.geometry_pass.render(vk_ctx);
     }
 }

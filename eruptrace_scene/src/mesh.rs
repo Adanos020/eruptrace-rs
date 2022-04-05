@@ -62,8 +62,7 @@ impl Mesh {
             Some(object) => {
                 let get_transform = |name, func: &dyn Fn(&glm::Vec3) -> glm::Mat4x4| match object
                     .get(name)
-                    .map(|a| a.as_array())
-                    .flatten()
+                    .and_then(|a| a.as_array())
                 {
                     Some(arr) => {
                         let vector = glm::vec3(

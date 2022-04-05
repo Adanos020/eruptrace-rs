@@ -14,35 +14,50 @@ pub struct AllocatedBuffer<T: Sized> {
 }
 
 impl<T: Sized> AllocatedBuffer<T> {
-    pub fn with_data(
+    pub fn new(
         allocator: Arc<RwLock<vma::Allocator>>,
         buffer_info: &vk::BufferCreateInfoBuilder,
-        allocation_info: vma::AllocationCreateInfo,
-        data: &[T],
-    ) -> vma::Result<Self> {
-        let data_size = std::mem::size_of::<T>() * data.len();
-        let buffer_info = buffer_info.size(data_size as vk::DeviceSize);
+        usage: vma::MemoryUsage,
+    ) -> Self {
+        let allocation_info = vma::AllocationCreateInfo {
+            usage,
+            flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
+                | vma::AllocationCreateFlags::MAPPED,
+            ..Default::default()
+        };
         let (buffer, allocation, allocation_info) = allocator
             .read()
             .unwrap()
-            .create_buffer(&buffer_info, &allocation_info)?;
+            .create_buffer(buffer_info, &allocation_info)
+            .expect("Cannot create buffer");
         allocator
             .read()
             .unwrap()
-            .flush_allocation(&allocation, 0, data_size);
-        let mut buf = Self {
+            .flush_allocation(&allocation, 0, buffer_info.size as usize);
+        Self {
             buffer,
             size: buffer_info.size,
             allocator,
             allocation,
             allocation_info,
             _phantom: Default::default(),
-        };
-        buf.set_data(data);
-        Ok(buf)
+        }
     }
 
-    pub fn set_data(&mut self, data: &[T]) {
+    pub fn with_data(
+        allocator: Arc<RwLock<vma::Allocator>>,
+        buffer_info: &vk::BufferCreateInfoBuilder,
+        usage: vma::MemoryUsage,
+        data: &[T],
+    ) -> Self {
+        let data_size = std::mem::size_of::<T>() * data.len();
+        let buffer_info = buffer_info.size(data_size as vk::DeviceSize);
+        let buf = Self::new(allocator, &buffer_info, usage);
+        buf.set_data(data);
+        buf
+    }
+
+    pub fn set_data(&self, data: &[T]) {
         let data_size = std::mem::size_of::<T>() * data.len();
         assert!(data_size <= self.allocation_info.get_size());
         let buffer_addr = self

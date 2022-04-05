@@ -1,10 +1,7 @@
 use crate::geometry_pass::shaders::{MESH_FRAGMENT_SHADER, MESH_VERTEX_SHADER};
 use erupt::{vk, DeviceLoader, ExtendableFrom, SmallVec};
 use eruptrace_scene::{mesh::Mesh as SceneMesh, Camera};
-use eruptrace_vk::{
-    contexts::RenderContext, shader::make_shader_module, AllocatedBuffer, PipelineContext,
-    VulkanContext,
-};
+use eruptrace_vk::{command, shader::make_shader_module, AllocatedBuffer, PipelineContext, VulkanContext, AllocatedImage};
 use itertools::Itertools;
 use nalgebra_glm as glm;
 use std::ffi::{c_void, CString};
@@ -60,6 +57,12 @@ pub struct GeometryPass {
     mesh_metas: AllocatedBuffer<MeshMetas>,
     camera_uniforms: AllocatedBuffer<CameraUniforms>,
 
+    output_extent: vk::Extent2D,
+    pub out_positions: AllocatedImage,
+    pub out_normals: AllocatedImage,
+    pub out_texcoords: AllocatedImage,
+    pub out_materials: AllocatedImage,
+
     graphics_pipeline_layout: vk::PipelineLayout,
     graphics_pipeline: vk::Pipeline,
 
@@ -76,14 +79,7 @@ impl GeometryPass {
         camera: &Camera,
         scene_meshes: &[SceneMesh],
     ) -> vma::Result<Self> {
-        // Mesh data
-        let allocation_info = vma::AllocationCreateInfo {
-            usage: vma::MemoryUsage::CpuToGpu,
-            flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
-                | vma::AllocationCreateFlags::MAPPED,
-            ..Default::default()
-        };
-
+        // Input buffers
         let vertex_buffer = {
             let vertices = scene_meshes
                 .iter()
@@ -105,9 +101,9 @@ impl GeometryPass {
             AllocatedBuffer::with_data(
                 allocator.clone(),
                 &buffer_info,
-                allocation_info.clone(),
+                vma::MemoryUsage::CpuToGpu,
                 &vertices,
-            )?
+            )
         };
 
         let index_buffer = {
@@ -122,9 +118,9 @@ impl GeometryPass {
             AllocatedBuffer::with_data(
                 allocator.clone(),
                 &buffer_info,
-                allocation_info.clone(),
+                vma::MemoryUsage::CpuToGpu,
                 &indices,
-            )?
+            )
         };
 
         let mut vertices_offset = 0;
@@ -161,9 +157,9 @@ impl GeometryPass {
             AllocatedBuffer::with_data(
                 allocator.clone(),
                 &storage_buffer_info,
-                allocation_info.clone(),
+                vma::MemoryUsage::CpuToGpu,
                 &uniforms,
-            )?
+            )
         };
 
         let camera_uniforms = {
@@ -178,8 +174,28 @@ impl GeometryPass {
                 view_transform: eruptrace_vk::std140::mat4x4(&view),
                 projection_transform: eruptrace_vk::std140::mat4x4(&proj),
             }];
-            AllocatedBuffer::with_data(allocator, &uniform_buffer_info, allocation_info, &uniforms)?
+            AllocatedBuffer::with_data(allocator.clone(), &uniform_buffer_info, vma::MemoryUsage::CpuToGpu, &uniforms)
         };
+
+        // Output images
+        let make_gbuffer = |format| AllocatedImage::color_attachment(
+            vk_ctx.clone(),
+            allocator.clone(),
+            format,
+            vk::Extent3D {
+                width: 1,
+                height: 1,
+                depth: 1,
+            },
+            vk::ImageViewType::_2D,
+            1,
+            1,
+        );
+
+        let out_positions = make_gbuffer(vk::Format::R32G32B32A32_SFLOAT);
+        let out_normals = make_gbuffer(vk::Format::R32G32B32A32_SFLOAT);
+        let out_texcoords = make_gbuffer(vk::Format::R32G32_SFLOAT);
+        let out_materials = make_gbuffer(vk::Format::R32_UINT);
 
         // Descriptor sets
         let descriptor_pool = {
@@ -401,6 +417,14 @@ impl GeometryPass {
             index_buffer,
             mesh_metas,
             camera_uniforms,
+            output_extent: vk::Extent2D {
+                width: camera.img_size[0],
+                height: camera.img_size[1],
+            },
+            out_positions,
+            out_normals,
+            out_texcoords,
+            out_materials,
             descriptor_set_layouts,
             descriptor_pool,
             descriptor_sets,
@@ -414,6 +438,10 @@ impl GeometryPass {
         self.index_buffer.destroy();
         self.camera_uniforms.destroy();
         self.mesh_metas.destroy();
+        self.out_positions.destroy(device);
+        self.out_normals.destroy(device);
+        self.out_texcoords.destroy(device);
+        self.out_materials.destroy(device);
         unsafe {
             for &layout in self.descriptor_set_layouts.iter() {
                 device.destroy_descriptor_set_layout(layout, None);
@@ -440,27 +468,69 @@ impl GeometryPass {
         self.camera_uniforms.set_data(&[data]);
     }
 
-    pub fn render(&self, ctx: RenderContext) {
-        unsafe {
-            ctx.device.cmd_bind_pipeline(
-                ctx.command_buffer,
+    pub fn render(&self, vk_ctx: VulkanContext) {
+        let make_attachment = |view| vk::RenderingAttachmentInfoBuilder::new()
+            .image_view(view)
+            .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .clear_value(vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 0.0],
+                },
+            })
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .resolve_image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+        let colour_attachments = vec![
+            make_attachment(self.out_positions.view),
+            make_attachment(self.out_normals.view),
+            make_attachment(self.out_texcoords.view),
+            make_attachment(self.out_materials.view),
+        ];
+        let rendering_info = vk::RenderingInfoBuilder::new()
+            .color_attachments(&colour_attachments)
+            .layer_count(1)
+            .render_area(vk::Rect2D {
+                offset: Default::default(),
+                extent: self.output_extent,
+            });
+
+        command::immediate_submit(vk_ctx, |device, command_buffer| unsafe {
+            device.cmd_set_scissor(
+                command_buffer,
+                0,
+                &[vk::Rect2DBuilder::new().extent(self.output_extent)],
+            );
+            device.cmd_set_viewport(
+                command_buffer,
+                0,
+                &[
+                    vk::ViewportBuilder::new()
+                        .width(self.output_extent.width as _)
+                        .height(self.output_extent.height as _)
+                        .min_depth(0.0)
+                        .max_depth(1.0),
+                ],
+            );
+            device.cmd_begin_rendering(command_buffer, &rendering_info);
+            device.cmd_bind_pipeline(
+                command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
                 self.graphics_pipeline,
             );
-            ctx.device.cmd_bind_vertex_buffers(
-                ctx.command_buffer,
+            device.cmd_bind_vertex_buffers(
+                command_buffer,
                 0,
                 &[self.vertex_buffer.buffer],
                 &[0],
             );
-            ctx.device.cmd_bind_index_buffer(
-                ctx.command_buffer,
+            device.cmd_bind_index_buffer(
+                command_buffer,
                 self.index_buffer.buffer,
                 0,
                 vk::IndexType::UINT32,
             );
-            ctx.device.cmd_bind_descriptor_sets(
-                ctx.command_buffer,
+            device.cmd_bind_descriptor_sets(
+                command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
                 self.graphics_pipeline_layout,
                 0,
@@ -471,16 +541,16 @@ impl GeometryPass {
                 let push_constants = PushConstants {
                     mesh_meta_index: uint(i as u32),
                 };
-                ctx.device.cmd_push_constants(
-                    ctx.command_buffer,
+                device.cmd_push_constants(
+                    command_buffer,
                     self.graphics_pipeline_layout,
                     vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
                     0,
                     std::mem::size_of::<PushConstants>() as u32,
                     &push_constants as *const PushConstants as *const c_void,
                 );
-                ctx.device.cmd_draw_indexed(
-                    ctx.command_buffer,
+                device.cmd_draw_indexed(
+                    command_buffer,
                     mesh.index_count,
                     1,
                     mesh.first_index,
@@ -488,6 +558,7 @@ impl GeometryPass {
                     0,
                 );
             }
-        }
+            device.cmd_end_rendering(command_buffer);
+        });
     }
 }

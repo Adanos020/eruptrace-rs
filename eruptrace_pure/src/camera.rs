@@ -25,17 +25,11 @@ impl CameraUniform {
     pub fn create_buffer(
         self,
         allocator: Arc<RwLock<vma::Allocator>>,
-    ) -> vma::Result<AllocatedBuffer<Self>> {
+    ) -> AllocatedBuffer<Self> {
         let buffer_info = vk::BufferCreateInfoBuilder::new()
             .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
-        let allocation_info = vma::AllocationCreateInfo {
-            usage: vma::MemoryUsage::CpuToGpu,
-            flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
-                | vma::AllocationCreateFlags::MAPPED,
-            ..Default::default()
-        };
-        AllocatedBuffer::with_data(allocator, &buffer_info, allocation_info, &[self])
+        AllocatedBuffer::with_data(allocator, &buffer_info, vma::MemoryUsage::CpuToGpu, &[self])
     }
 }
 

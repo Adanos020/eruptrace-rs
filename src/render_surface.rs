@@ -60,31 +60,24 @@ impl RenderSurface {
             let buffer_info = vk::BufferCreateInfoBuilder::new()
                 .usage(vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            let allocation_info = vma::AllocationCreateInfo {
-                usage: vma::MemoryUsage::CpuToGpu,
-                flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
-                    | vma::AllocationCreateFlags::MAPPED,
-                ..Default::default()
-            };
-
-            AllocatedBuffer::with_data(allocator.clone(), &buffer_info, allocation_info, &vertices)
-                .expect("Cannot create vertex buffer")
+            AllocatedBuffer::with_data(allocator.clone(), &buffer_info, vma::MemoryUsage::CpuToGpu, &vertices)
         };
 
-        let render_image = AllocatedImage::with_data(
-            vk_ctx.clone(),
-            allocator,
-            vk::Format::R8G8B8A8_UNORM,
-            vk::Extent3D {
-                width: 1,
-                height: 1,
-                depth: 1,
-            },
-            vk::ImageViewType::_2D,
-            1,
-            1,
-            &[0u8, 255u8, 0u8, 0u8],
-        )?;
+        let render_image = {
+            AllocatedImage::texture(
+                vk_ctx.clone(),
+                allocator,
+                vk::Extent3D {
+                    width: 1,
+                    height: 1,
+                    depth: 1,
+                },
+                vk::ImageViewType::_2D,
+                1,
+                1,
+                &[0u8, 1u8, 0u8, 0u8],
+            )
+        };
 
         let descriptor_set_layouts = {
             let bindings = vec![

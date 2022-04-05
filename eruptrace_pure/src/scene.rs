@@ -59,7 +59,7 @@ impl SceneBuffers {
         allocator: Arc<RwLock<vma::Allocator>>,
         vk_ctx: VulkanContext,
         scene: Scene,
-    ) -> vma::Result<Self> {
+    ) -> Self {
         let n_textures = scene.texture_paths.len();
         let n_normal_maps = scene.normal_map_paths.len();
         let n_triangles = scene.meshes.len() as u32;
@@ -78,54 +78,46 @@ impl SceneBuffers {
         let buffer_info = vk::BufferCreateInfoBuilder::new()
             .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
-        let buffer_allocation_info = vma::AllocationCreateInfo {
-            usage: vma::MemoryUsage::CpuToGpu,
-            flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
-                | vma::AllocationCreateFlags::MAPPED,
-            ..Default::default()
-        };
 
-        Ok(SceneBuffers {
-            textures_image: AllocatedImage::with_data(
+        SceneBuffers {
+            textures_image: AllocatedImage::texture(
                 vk_ctx.clone(),
                 allocator.clone(),
-                vk::Format::R8G8B8A8_UNORM,
                 image_extent,
                 vk::ImageViewType::_2D_ARRAY,
                 1,
                 n_textures as u32,
                 &textures,
-            )?,
-            normal_maps_image: AllocatedImage::with_data(
+            ),
+            normal_maps_image: AllocatedImage::texture(
                 vk_ctx,
                 allocator.clone(),
-                vk::Format::R8G8B8A8_UNORM,
                 image_extent,
                 vk::ImageViewType::_2D_ARRAY,
                 1,
                 n_normal_maps as u32,
                 &normal_maps,
-            )?,
+            ),
             materials_buffer: AllocatedBuffer::with_data(
                 allocator.clone(),
                 &buffer_info,
-                buffer_allocation_info.clone(),
+                vma::MemoryUsage::CpuToGpu,
                 &materials,
-            )?,
+            ),
             triangles_buffer: AllocatedBuffer::with_data(
                 allocator.clone(),
                 &buffer_info,
-                buffer_allocation_info.clone(),
+                vma::MemoryUsage::CpuToGpu,
                 &triangles,
-            )?,
+            ),
             bih_buffer: AllocatedBuffer::with_data(
                 allocator,
                 &buffer_info,
-                buffer_allocation_info,
+                vma::MemoryUsage::CpuToGpu,
                 &bih,
-            )?,
+            ),
             n_triangles,
-        })
+        }
     }
 
     pub fn destroy(&self, device: &DeviceLoader) {
