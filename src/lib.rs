@@ -1,3 +1,7 @@
+mod render_surface;
+mod shaders;
+
+use crate::render_surface::RenderSurface;
 use erupt::{
     utils::surface, vk, DeviceLoader, EntryLoader, ExtendableFrom, InstanceLoader, SmallVec,
 };
@@ -28,6 +32,7 @@ pub struct App {
     upload_fence: vk::Fence,
     allocator: Option<Arc<RwLock<vma::Allocator>>>,
     camera: Camera,
+    render_surface: Option<RenderSurface>,
     pure_ray_tracer: Option<PureRayTracer>,
     deferred_ray_tracer: Option<DeferredRayTracer>,
 }
@@ -197,6 +202,19 @@ impl App {
             Some(Arc::new(RwLock::new(allocator)))
         };
 
+        let render_surface = Some(RenderSurface::new(
+            allocator.as_ref().unwrap().clone(),
+            VulkanContext {
+                device: device.as_ref().unwrap().clone(),
+                queue,
+                command_pool,
+                upload_fence,
+            },
+            PipelineContext {
+                surface_format: format,
+            },
+        )?);
+
         let pure_ray_tracer = Some(PureRayTracer::new(
             allocator.as_ref().unwrap().clone(),
             VulkanContext {
@@ -242,6 +260,7 @@ impl App {
             upload_fence,
             allocator,
             camera,
+            render_surface,
             pure_ray_tracer,
             deferred_ray_tracer,
         })
@@ -387,13 +406,20 @@ impl App {
                 .cmd_begin_rendering(in_flight.command_buffer, &rendering_info);
         }
 
-        self.deferred_ray_tracer
+        // self.deferred_ray_tracer
+        //     .as_ref()
+        //     .unwrap()
+        //     .render(RenderContext {
+        //         device: self.device.as_ref().unwrap(),
+        //         command_buffer: in_flight.command_buffer,
+        //     });
+        self.render_surface
             .as_ref()
             .unwrap()
             .render(RenderContext {
-                device: self.device.as_ref().unwrap(),
-                command_buffer: in_flight.command_buffer,
-            });
+            device: self.device.as_ref().unwrap(),
+            command_buffer: in_flight.command_buffer,
+        });
 
         unsafe {
             self.device
@@ -495,6 +521,10 @@ impl Drop for App {
             let drt_ref = self.deferred_ray_tracer.as_ref().unwrap();
             drt_ref.destroy(self.device.as_ref().unwrap());
             self.deferred_ray_tracer = None;
+
+            let rsf_ref = self.render_surface.as_ref().unwrap();
+            rsf_ref.destroy(self.device.as_ref().unwrap());
+            self.render_surface = None;
 
             self.device
                 .as_ref()

@@ -412,6 +412,7 @@ dependencies = [
  "eruptrace_scene",
  "eruptrace_vk",
  "image",
+ "itertools",
  "nalgebra-glm",
  "std140",
  "vk-mem-erupt",

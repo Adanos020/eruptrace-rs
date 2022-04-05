@@ -1,39 +1,27 @@
-use crate::{scene::SceneBuffers, shaders::*, CameraUniform};
-use erupt::{vk, DeviceLoader, ExtendableFrom, SmallVec};
+use crate::shaders::{SURFACE_FRAGMENT_SHADER, SURFACE_VERTEX_SHADER};
+use erupt::{vk, ExtendableFrom, DeviceLoader, SmallVec};
 use eruptrace_vk::{
-    contexts::{PipelineContext, RenderContext},
-    shader::make_shader_module,
-    AllocatedBuffer, VulkanContext,
+    shader::make_shader_module, AllocatedBuffer, AllocatedImage, PipelineContext, VulkanContext,
 };
-use itertools::Itertools;
 use nalgebra_glm as glm;
 use std::{
-    ffi::{c_void, CString},
+    ffi::CString,
     sync::{Arc, RwLock},
 };
-use std140::*;
 use vk_mem_erupt as vma;
+use eruptrace_vk::contexts::RenderContext;
 
-#[repr(C)]
-#[derive(Copy, Clone, Default, Debug)]
-pub struct Vertex {
-    pub position: glm::Vec2,
-}
-
-#[repr_std140]
 #[derive(Copy, Clone, Debug)]
-struct PushConstants {
-    n_triangles: uint,
-    use_bih: boolean,
+struct Vertex {
+    position: glm::Vec2,
+    texcoords: glm::Vec2,
 }
 
 #[derive(Clone)]
 pub struct RenderSurface {
     vertex_buffer: AllocatedBuffer<Vertex>,
-    push_constants: PushConstants,
+    pub render_image: AllocatedImage,
 
-    vertex_shader: vk::ShaderModule,
-    fragment_shader: vk::ShaderModule,
     graphics_pipeline_layout: vk::PipelineLayout,
     graphics_pipeline: vk::Pipeline,
 
@@ -48,9 +36,56 @@ impl RenderSurface {
         allocator: Arc<RwLock<vma::Allocator>>,
         vk_ctx: VulkanContext,
         pipeline_ctx: PipelineContext,
-        camera_buffer: &AllocatedBuffer<CameraUniform>,
-        scene_buffers: &SceneBuffers,
-    ) -> Self {
+    ) -> vma::Result<Self> {
+        let vertex_buffer = {
+            let vertices = [
+                Vertex {
+                    position: glm::vec2(-1.0, -1.0),
+                    texcoords: glm::vec2(0.0, 0.0),
+                },
+                Vertex {
+                    position: glm::vec2(1.0, -1.0),
+                    texcoords: glm::vec2(1.0, 0.0),
+                },
+                Vertex {
+                    position: glm::vec2(-1.0, 1.0),
+                    texcoords: glm::vec2(0.0, 1.0),
+                },
+                Vertex {
+                    position: glm::vec2(1.0, 1.0),
+                    texcoords: glm::vec2(1.0, 1.0),
+                },
+            ];
+
+            let buffer_info = vk::BufferCreateInfoBuilder::new()
+                .usage(vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE);
+            let allocation_info = vma::AllocationCreateInfo {
+                usage: vma::MemoryUsage::CpuToGpu,
+                flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
+                    | vma::AllocationCreateFlags::MAPPED,
+                ..Default::default()
+            };
+
+            AllocatedBuffer::with_data(allocator.clone(), &buffer_info, allocation_info, &vertices)
+                .expect("Cannot create vertex buffer")
+        };
+
+        let render_image = AllocatedImage::with_data(
+            vk_ctx.clone(),
+            allocator,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::Extent3D {
+                width: 1,
+                height: 1,
+                depth: 1,
+            },
+            vk::ImageViewType::_2D,
+            1,
+            1,
+            &[0u8, 255u8, 0u8, 0u8],
+        )?;
+
         let descriptor_set_layouts = {
             let bindings = vec![
                 vk::DescriptorSetLayoutBindingBuilder::new()
@@ -58,34 +93,9 @@ impl RenderSurface {
                     .descriptor_count(1)
                     .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                     .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-                vk::DescriptorSetLayoutBindingBuilder::new()
-                    .binding(1)
-                    .descriptor_count(1)
-                    .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-                vk::DescriptorSetLayoutBindingBuilder::new()
-                    .binding(2)
-                    .descriptor_count(1)
-                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-                vk::DescriptorSetLayoutBindingBuilder::new()
-                    .binding(3)
-                    .descriptor_count(1)
-                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-                vk::DescriptorSetLayoutBindingBuilder::new()
-                    .binding(4)
-                    .descriptor_count(1)
-                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-                vk::DescriptorSetLayoutBindingBuilder::new()
-                    .binding(5)
-                    .descriptor_count(1)
-                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT),
             ];
-            let create_info =
-                vk::DescriptorSetLayoutCreateInfoBuilder::new().bindings(&bindings);
+            let create_info = vk::DescriptorSetLayoutCreateInfoBuilder::new()
+                .bindings(&bindings);
             let layout = unsafe {
                 vk_ctx
                     .device
@@ -100,12 +110,6 @@ impl RenderSurface {
                 vk::DescriptorPoolSizeBuilder::new()
                     ._type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                     .descriptor_count(10),
-                vk::DescriptorPoolSizeBuilder::new()
-                    ._type(vk::DescriptorType::UNIFORM_BUFFER)
-                    .descriptor_count(10),
-                vk::DescriptorPoolSizeBuilder::new()
-                    ._type(vk::DescriptorType::STORAGE_BUFFER)
-                    .descriptor_count(10),
             ];
             let create_info = vk::DescriptorPoolCreateInfoBuilder::new()
                 .max_sets(10)
@@ -118,15 +122,16 @@ impl RenderSurface {
             }
         };
 
-        let descriptor_sets = unsafe {
-            vk_ctx
-                .device
-                .allocate_descriptor_sets(
-                    &vk::DescriptorSetAllocateInfoBuilder::new()
-                        .descriptor_pool(descriptor_pool)
-                        .set_layouts(&descriptor_set_layouts),
-                )
-                .expect("Cannot allocate descriptor sets")
+        let descriptor_sets = {
+            let allocate_info = vk::DescriptorSetAllocateInfoBuilder::new()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&descriptor_set_layouts);
+            unsafe {
+                vk_ctx
+                    .device
+                    .allocate_descriptor_sets(&allocate_info)
+                    .expect("Cannot allocate descriptor sets")
+            }
         };
 
         let sampler = {
@@ -144,35 +149,11 @@ impl RenderSurface {
             }
         };
 
-        let image_infos = {
-            [
-                scene_buffers.textures_image.view,
-                scene_buffers.normal_maps_image.view,
-            ]
-            .into_iter()
-            .map(|view| {
-                vk::DescriptorImageInfoBuilder::new()
-                    .image_view(view)
-                    .sampler(sampler)
-                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            })
-            .collect_vec()
-        };
-
-        let uniform_buffer_infos = vec![vk::DescriptorBufferInfoBuilder::new()
-            .buffer(camera_buffer.buffer)
-            .range(vk::WHOLE_SIZE)];
-
-        let storage_buffer_infos = vec![
-            vk::DescriptorBufferInfoBuilder::new()
-                .buffer(scene_buffers.bih_buffer.buffer)
-                .range(vk::WHOLE_SIZE),
-            vk::DescriptorBufferInfoBuilder::new()
-                .buffer(scene_buffers.materials_buffer.buffer)
-                .range(vk::WHOLE_SIZE),
-            vk::DescriptorBufferInfoBuilder::new()
-                .buffer(scene_buffers.triangles_buffer.buffer)
-                .range(vk::WHOLE_SIZE),
+        let image_infos = vec![
+            vk::DescriptorImageInfoBuilder::new()
+                .image_view(render_image.view)
+                .sampler(sampler)
+                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL),
         ];
 
         let descriptor_writes = vec![
@@ -181,16 +162,6 @@ impl RenderSurface {
                 .dst_set(descriptor_sets[0])
                 .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
                 .image_info(&image_infos),
-            vk::WriteDescriptorSetBuilder::new()
-                .dst_binding(2)
-                .dst_set(descriptor_sets[0])
-                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-                .buffer_info(&uniform_buffer_infos),
-            vk::WriteDescriptorSetBuilder::new()
-                .dst_binding(3)
-                .dst_set(descriptor_sets[0])
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&storage_buffer_infos),
         ];
 
         unsafe {
@@ -199,38 +170,8 @@ impl RenderSurface {
                 .update_descriptor_sets(&descriptor_writes, &[]);
         }
 
-        let vertex_buffer = {
-            let vertices = [
-                Vertex {
-                    position: glm::vec2(-1.0, -1.0),
-                },
-                Vertex {
-                    position: glm::vec2(1.0, -1.0),
-                },
-                Vertex {
-                    position: glm::vec2(-1.0, 1.0),
-                },
-                Vertex {
-                    position: glm::vec2(1.0, 1.0),
-                },
-            ];
-
-            let buffer_info = vk::BufferCreateInfoBuilder::new()
-                .usage(vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            let allocation_info = vma::AllocationCreateInfo {
-                usage: vma::MemoryUsage::CpuToGpu,
-                flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
-                    | vma::AllocationCreateFlags::MAPPED,
-                ..Default::default()
-            };
-
-            AllocatedBuffer::with_data(allocator, &buffer_info, allocation_info, &vertices)
-                .expect("Cannot create vertex buffer")
-        };
-
-        let vertex_shader = make_shader_module(&vk_ctx.device, VERTEX_SHADER);
-        let fragment_shader = make_shader_module(&vk_ctx.device, FRAGMENT_SHADER);
+        let vertex_shader = make_shader_module(&vk_ctx.device, SURFACE_VERTEX_SHADER);
+        let fragment_shader = make_shader_module(&vk_ctx.device, SURFACE_FRAGMENT_SHADER);
 
         let entry_point = CString::new("main").unwrap();
         let shader_stages = vec![
@@ -247,15 +188,9 @@ impl RenderSurface {
         let mut pipeline_rendering_info = vk::PipelineRenderingCreateInfoBuilder::new()
             .color_attachment_formats(std::slice::from_ref(&pipeline_ctx.surface_format.format));
 
-        let push_constants = vec![vk::PushConstantRangeBuilder::new()
-            .offset(0)
-            .size(std::mem::size_of::<PushConstants>() as u32)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
-
         let graphics_pipeline_layout = {
-            let create_info = vk::PipelineLayoutCreateInfoBuilder::new()
-                .set_layouts(&descriptor_set_layouts)
-                .push_constant_ranges(&push_constants);
+            let create_info =
+                vk::PipelineLayoutCreateInfoBuilder::new().set_layouts(&descriptor_set_layouts);
             unsafe {
                 vk_ctx
                     .device
@@ -311,6 +246,12 @@ impl RenderSurface {
                 .location(0)
                 .format(vk::Format::R32G32_SFLOAT)
                 .offset(0),
+            // texCoord
+            vk::VertexInputAttributeDescriptionBuilder::new()
+                .binding(0)
+                .location(1)
+                .format(vk::Format::R32G32_SFLOAT)
+                .offset(std::mem::size_of::<glm::Vec2>() as u32),
         ];
         let vertex_input = vk::PipelineVertexInputStateCreateInfoBuilder::new()
             .vertex_binding_descriptions(&binding_descriptions)
@@ -335,25 +276,26 @@ impl RenderSurface {
                 .expect("Cannot create graphics pipeline")[0]
         };
 
-        Self {
+        unsafe {
+            vk_ctx.device.destroy_shader_module(vertex_shader, None);
+            vk_ctx.device.destroy_shader_module(fragment_shader, None);
+        }
+
+        Ok(Self {
             vertex_buffer,
-            push_constants: PushConstants {
-                n_triangles: uint(scene_buffers.n_triangles),
-                use_bih: boolean::True,
-            },
-            vertex_shader,
-            fragment_shader,
+            render_image,
             graphics_pipeline_layout,
             graphics_pipeline,
             sampler,
             descriptor_set_layouts,
             descriptor_pool,
             descriptor_sets,
-        }
+        })
     }
 
     pub fn destroy(&self, device: &DeviceLoader) {
         self.vertex_buffer.destroy();
+        self.render_image.destroy(device);
         unsafe {
             for &layout in self.descriptor_set_layouts.iter() {
                 device.destroy_descriptor_set_layout(layout, None);
@@ -362,9 +304,11 @@ impl RenderSurface {
             device.destroy_sampler(self.sampler, None);
             device.destroy_pipeline(self.graphics_pipeline, None);
             device.destroy_pipeline_layout(self.graphics_pipeline_layout, None);
-            device.destroy_shader_module(self.vertex_shader, None);
-            device.destroy_shader_module(self.fragment_shader, None);
         }
+    }
+
+    pub fn update_image_size(&mut self, size: [u32; 2]) {
+
     }
 
     pub fn render(&self, ctx: RenderContext) {
@@ -381,14 +325,6 @@ impl RenderSurface {
                 0,
                 &self.descriptor_sets,
                 &[],
-            );
-            ctx.device.cmd_push_constants(
-                ctx.command_buffer,
-                self.graphics_pipeline_layout,
-                vk::ShaderStageFlags::FRAGMENT,
-                0,
-                std::mem::size_of::<PushConstants>() as u32,
-                &self.push_constants as *const PushConstants as *const c_void,
             );
             ctx.device.cmd_bind_vertex_buffers(
                 ctx.command_buffer,
