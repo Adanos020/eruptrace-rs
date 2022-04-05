@@ -9,6 +9,7 @@ use std::{
     ffi::CString,
     sync::{Arc, RwLock},
 };
+use itertools::Itertools;
 use vk_mem_erupt as vma;
 
 #[derive(Copy, Clone, Debug)]
@@ -19,6 +20,12 @@ struct Vertex {
 
 #[derive(Clone)]
 pub struct RenderSurface {
+    allocator: Arc<RwLock<vma::Allocator>>,
+
+    frames_in_flight: u32,
+    frames_since_resize: u32,
+    images_to_delete: Vec<AllocatedImage>,
+
     vertex_buffer: AllocatedBuffer<Vertex>,
     pub render_image: AllocatedImage,
 
@@ -36,6 +43,7 @@ impl RenderSurface {
         allocator: Arc<RwLock<vma::Allocator>>,
         vk_ctx: VulkanContext,
         pipeline_ctx: PipelineContext,
+        frames_in_flight: u32,
     ) -> vma::Result<Self> {
         let vertex_buffer = {
             let vertices = [
@@ -70,7 +78,7 @@ impl RenderSurface {
 
         let render_image = AllocatedImage::texture(
             vk_ctx.clone(),
-            allocator,
+            allocator.clone(),
             vk::Extent3D {
                 width: 1,
                 height: 1,
@@ -79,7 +87,7 @@ impl RenderSurface {
             vk::ImageViewType::_2D,
             1,
             1,
-            &[0u8, 255u8, 0u8, 255u8],
+            &[0u8, 0u8, 0u8, 0u8],
         );
 
         let descriptor_set_layouts = {
@@ -269,6 +277,10 @@ impl RenderSurface {
         }
 
         Ok(Self {
+            allocator,
+            frames_in_flight,
+            frames_since_resize: 0,
+            images_to_delete: vec![],
             vertex_buffer,
             render_image,
             graphics_pipeline_layout,
@@ -283,6 +295,9 @@ impl RenderSurface {
     pub fn destroy(&self, device: &DeviceLoader) {
         self.vertex_buffer.destroy();
         self.render_image.destroy(device);
+        for image in self.images_to_delete.iter() {
+            image.destroy(device);
+        }
         unsafe {
             for &layout in self.descriptor_set_layouts.iter() {
                 device.destroy_descriptor_set_layout(layout, None);
@@ -294,9 +309,52 @@ impl RenderSurface {
         }
     }
 
-    pub fn update_image_size(&mut self, size: [u32; 2]) {}
+    pub fn update_image_size(&mut self, vk_ctx: VulkanContext, extent: vk::Extent2D) {
+        let texture_data = (0 .. 4 * extent.width * extent.height).map(|_| 0u8).collect_vec();
+        let new_image = AllocatedImage::texture(
+            vk_ctx.clone(),
+            self.allocator.clone(),
+            vk::Extent3D {
+                width: extent.width,
+                height: extent.height,
+                depth: 1,
+            },
+            vk::ImageViewType::_2D,
+            1,
+            1,
+            &texture_data,
+        );
+        let to_delete = std::mem::replace(&mut self.render_image, new_image);
+        self.images_to_delete.push(to_delete);
 
-    pub fn render(&self, ctx: RenderContext) {
+        let image_infos = vec![vk::DescriptorImageInfoBuilder::new()
+            .image_view(self.render_image.view)
+            .sampler(self.sampler)
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
+
+        let descriptor_writes = vec![vk::WriteDescriptorSetBuilder::new()
+            .dst_binding(0)
+            .dst_set(self.descriptor_sets[0])
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&image_infos)];
+
+        unsafe {
+            vk_ctx
+                .device
+                .update_descriptor_sets(&descriptor_writes, &[]);
+        }
+    }
+
+    pub fn render(&mut self, ctx: RenderContext) {
+        if self.frames_since_resize <= self.frames_in_flight {
+            self.frames_since_resize += 1;
+            if self.frames_since_resize == self.frames_in_flight {
+                for image in self.images_to_delete.drain(..) {
+                    image.destroy(&ctx.device);
+                }
+            }
+        }
+
         unsafe {
             ctx.device.cmd_bind_pipeline(
                 ctx.command_buffer,

@@ -384,6 +384,7 @@ dependencies = [
  "eruptrace_pure",
  "eruptrace_scene",
  "eruptrace_vk",
+ "itertools",
  "nalgebra-glm",
  "pico-args",
  "vk-mem-erupt",

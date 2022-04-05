@@ -213,6 +213,7 @@ impl App {
             PipelineContext {
                 surface_format: format,
             },
+            swapchain.frames_in_flight() as u32,
         )?);
 
         let pure_ray_tracer = Some(PureRayTracer::new(
@@ -269,6 +270,16 @@ impl App {
     pub fn resize(&mut self, extent: vk::Extent2D) {
         self.swapchain.update(extent);
         self.camera.img_size = [extent.width, extent.height];
+        self.render_surface
+            .as_mut()
+            .unwrap()
+            .update_image_size(VulkanContext {
+                device: self.device.as_ref().unwrap().clone(),
+                queue: self.queue,
+                command_pool: self.command_pool,
+                upload_fence: self.upload_fence,
+            },
+            extent);
         self.pure_ray_tracer
             .as_mut()
             .unwrap()
@@ -406,7 +417,7 @@ impl App {
                 .cmd_begin_rendering(in_flight.command_buffer, &rendering_info);
         }
 
-        self.render_surface.as_ref().unwrap().render(RenderContext {
+        self.render_surface.as_mut().unwrap().render(RenderContext {
             device: self.device.as_ref().unwrap(),
             command_buffer: in_flight.command_buffer,
         });
