@@ -1,5 +1,6 @@
 use crate::shaders::{SURFACE_FRAGMENT_SHADER, SURFACE_VERTEX_SHADER};
-use erupt::{vk, ExtendableFrom, DeviceLoader, SmallVec};
+use erupt::{vk, DeviceLoader, ExtendableFrom, SmallVec};
+use eruptrace_vk::contexts::RenderContext;
 use eruptrace_vk::{
     shader::make_shader_module, AllocatedBuffer, AllocatedImage, PipelineContext, VulkanContext,
 };
@@ -9,7 +10,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 use vk_mem_erupt as vma;
-use eruptrace_vk::contexts::RenderContext;
 
 #[derive(Copy, Clone, Debug)]
 struct Vertex {
@@ -60,35 +60,35 @@ impl RenderSurface {
             let buffer_info = vk::BufferCreateInfoBuilder::new()
                 .usage(vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            AllocatedBuffer::with_data(allocator.clone(), &buffer_info, vma::MemoryUsage::CpuToGpu, &vertices)
-        };
-
-        let render_image = {
-            AllocatedImage::texture(
-                vk_ctx.clone(),
-                allocator,
-                vk::Extent3D {
-                    width: 1,
-                    height: 1,
-                    depth: 1,
-                },
-                vk::ImageViewType::_2D,
-                1,
-                1,
-                &[0u8, 1u8, 0u8, 0u8],
+            AllocatedBuffer::with_data(
+                allocator.clone(),
+                &buffer_info,
+                vma::MemoryUsage::CpuToGpu,
+                &vertices,
             )
         };
 
+        let render_image = AllocatedImage::texture(
+            vk_ctx.clone(),
+            allocator,
+            vk::Extent3D {
+                width: 1,
+                height: 1,
+                depth: 1,
+            },
+            vk::ImageViewType::_2D,
+            1,
+            1,
+            &[0u8, 255u8, 0u8, 255u8],
+        );
+
         let descriptor_set_layouts = {
-            let bindings = vec![
-                vk::DescriptorSetLayoutBindingBuilder::new()
-                    .binding(0)
-                    .descriptor_count(1)
-                    .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                    .stage_flags(vk::ShaderStageFlags::FRAGMENT),
-            ];
-            let create_info = vk::DescriptorSetLayoutCreateInfoBuilder::new()
-                .bindings(&bindings);
+            let bindings = vec![vk::DescriptorSetLayoutBindingBuilder::new()
+                .binding(0)
+                .descriptor_count(1)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
+            let create_info = vk::DescriptorSetLayoutCreateInfoBuilder::new().bindings(&bindings);
             let layout = unsafe {
                 vk_ctx
                     .device
@@ -99,11 +99,9 @@ impl RenderSurface {
         };
 
         let descriptor_pool = {
-            let sizes = vec![
-                vk::DescriptorPoolSizeBuilder::new()
-                    ._type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                    .descriptor_count(10),
-            ];
+            let sizes = vec![vk::DescriptorPoolSizeBuilder::new()
+                ._type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .descriptor_count(10)];
             let create_info = vk::DescriptorPoolCreateInfoBuilder::new()
                 .max_sets(10)
                 .pool_sizes(&sizes);
@@ -132,8 +130,8 @@ impl RenderSurface {
                 .address_mode_u(vk::SamplerAddressMode::REPEAT)
                 .address_mode_v(vk::SamplerAddressMode::REPEAT)
                 .address_mode_w(vk::SamplerAddressMode::REPEAT)
-                .min_filter(vk::Filter::LINEAR)
-                .mag_filter(vk::Filter::LINEAR);
+                .min_filter(vk::Filter::NEAREST)
+                .mag_filter(vk::Filter::NEAREST);
             unsafe {
                 vk_ctx
                     .device
@@ -142,20 +140,16 @@ impl RenderSurface {
             }
         };
 
-        let image_infos = vec![
-            vk::DescriptorImageInfoBuilder::new()
-                .image_view(render_image.view)
-                .sampler(sampler)
-                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL),
-        ];
+        let image_infos = vec![vk::DescriptorImageInfoBuilder::new()
+            .image_view(render_image.view)
+            .sampler(sampler)
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
 
-        let descriptor_writes = vec![
-            vk::WriteDescriptorSetBuilder::new()
-                .dst_binding(0)
-                .dst_set(descriptor_sets[0])
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .image_info(&image_infos),
-        ];
+        let descriptor_writes = vec![vk::WriteDescriptorSetBuilder::new()
+            .dst_binding(0)
+            .dst_set(descriptor_sets[0])
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&image_infos)];
 
         unsafe {
             vk_ctx
@@ -300,9 +294,7 @@ impl RenderSurface {
         }
     }
 
-    pub fn update_image_size(&mut self, size: [u32; 2]) {
-
-    }
+    pub fn update_image_size(&mut self, size: [u32; 2]) {}
 
     pub fn render(&self, ctx: RenderContext) {
         unsafe {

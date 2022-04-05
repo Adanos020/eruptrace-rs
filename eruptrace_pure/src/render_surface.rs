@@ -84,8 +84,7 @@ impl RenderSurface {
                     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                     .stage_flags(vk::ShaderStageFlags::FRAGMENT),
             ];
-            let create_info =
-                vk::DescriptorSetLayoutCreateInfoBuilder::new().bindings(&bindings);
+            let create_info = vk::DescriptorSetLayoutCreateInfoBuilder::new().bindings(&bindings);
             let layout = unsafe {
                 vk_ctx
                     .device
@@ -218,7 +217,12 @@ impl RenderSurface {
             let buffer_info = vk::BufferCreateInfoBuilder::new()
                 .usage(vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            AllocatedBuffer::with_data(allocator, &buffer_info, vma::MemoryUsage::CpuToGpu, &vertices)
+            AllocatedBuffer::with_data(
+                allocator,
+                &buffer_info,
+                vma::MemoryUsage::CpuToGpu,
+                &vertices,
+            )
         };
 
         let vertex_shader = make_shader_module(&vk_ctx.device, VERTEX_SHADER);

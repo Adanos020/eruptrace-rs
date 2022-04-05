@@ -406,10 +406,7 @@ impl App {
                 .cmd_begin_rendering(in_flight.command_buffer, &rendering_info);
         }
 
-        self.pure_ray_tracer
-            .as_ref()
-            .unwrap()
-            .render(RenderContext {
+        self.render_surface.as_ref().unwrap().render(RenderContext {
             device: self.device.as_ref().unwrap(),
             command_buffer: in_flight.command_buffer,
         });

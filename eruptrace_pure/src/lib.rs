@@ -31,8 +31,7 @@ impl PureRayTracer {
         camera: Camera,
         scene: Scene,
     ) -> Self {
-        let camera_buffer = CameraUniform::from(camera)
-            .create_buffer(allocator.clone());
+        let camera_buffer = CameraUniform::from(camera).create_buffer(allocator.clone());
         let scene_buffers = SceneBuffers::create_buffers(allocator.clone(), vk_ctx.clone(), scene);
         let render_surface = RenderSurface::new(
             allocator,

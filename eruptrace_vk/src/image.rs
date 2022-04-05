@@ -35,7 +35,10 @@ impl AllocatedImage {
         let (image, allocation, allocation_info) = allocator
             .read()
             .unwrap()
-            .create_image(&image_info.initial_layout(vk::ImageLayout::UNDEFINED), &allocation_info)
+            .create_image(
+                &image_info.initial_layout(vk::ImageLayout::UNDEFINED),
+                &allocation_info,
+            )
             .expect("Cannot create image");
 
         let view_info = vk::ImageViewCreateInfoBuilder::new()
@@ -78,7 +81,13 @@ impl AllocatedImage {
         range: vk::ImageSubresourceRange,
         data: &[T],
     ) -> Self {
-        let this = Self::new(vk_ctx.clone(), allocator.clone(), image_info, view_type, range);
+        let this = Self::new(
+            vk_ctx.clone(),
+            allocator.clone(),
+            image_info,
+            view_type,
+            range,
+        );
         this.set_data(vk_ctx, data);
         allocator.read().unwrap().flush_allocation(
             &this.allocation,
@@ -116,6 +125,11 @@ impl AllocatedImage {
 
         let this = Self::new(vk_ctx.clone(), allocator, image_info, view_type, range);
         this.set_data(vk_ctx, texture_data);
+        this.allocator.read().unwrap().flush_allocation(
+            &this.allocation,
+            0,
+            texture_data.len(),
+        );
         this
     }
 
@@ -164,7 +178,12 @@ impl AllocatedImage {
             let buffer_info = vk::BufferCreateInfoBuilder::new()
                 .usage(vk::BufferUsageFlags::TRANSFER_SRC)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            AllocatedBuffer::with_data(self.allocator.clone(), &buffer_info, vma::MemoryUsage::CpuOnly, data)
+            AllocatedBuffer::with_data(
+                self.allocator.clone(),
+                &buffer_info,
+                vma::MemoryUsage::CpuOnly,
+                data,
+            )
         };
 
         command::immediate_submit(vk_ctx, |device, command_buffer| unsafe {
@@ -181,8 +200,7 @@ impl AllocatedImage {
                     .src_access_mask(vk::AccessFlags::empty())
                     .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                     .image(self.image)
-                    .subresource_range(self.subresource_range),
-                ]
+                    .subresource_range(self.subresource_range)],
             );
             device.cmd_copy_buffer_to_image(
                 command_buffer,
@@ -216,8 +234,7 @@ impl AllocatedImage {
                     .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                     .dst_access_mask(vk::AccessFlags::SHADER_READ)
                     .image(self.image)
-                    .subresource_range(self.subresource_range),
-                ]
+                    .subresource_range(self.subresource_range)],
             );
         });
 

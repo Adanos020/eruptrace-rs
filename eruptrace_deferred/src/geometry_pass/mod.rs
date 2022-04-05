@@ -1,7 +1,10 @@
 use crate::geometry_pass::shaders::{MESH_FRAGMENT_SHADER, MESH_VERTEX_SHADER};
 use erupt::{vk, DeviceLoader, ExtendableFrom, SmallVec};
 use eruptrace_scene::{mesh::Mesh as SceneMesh, Camera};
-use eruptrace_vk::{command, shader::make_shader_module, AllocatedBuffer, PipelineContext, VulkanContext, AllocatedImage};
+use eruptrace_vk::{
+    command, shader::make_shader_module, AllocatedBuffer, AllocatedImage, PipelineContext,
+    VulkanContext,
+};
 use itertools::Itertools;
 use nalgebra_glm as glm;
 use std::ffi::{c_void, CString};
@@ -174,23 +177,30 @@ impl GeometryPass {
                 view_transform: eruptrace_vk::std140::mat4x4(&view),
                 projection_transform: eruptrace_vk::std140::mat4x4(&proj),
             }];
-            AllocatedBuffer::with_data(allocator.clone(), &uniform_buffer_info, vma::MemoryUsage::CpuToGpu, &uniforms)
+            AllocatedBuffer::with_data(
+                allocator.clone(),
+                &uniform_buffer_info,
+                vma::MemoryUsage::CpuToGpu,
+                &uniforms,
+            )
         };
 
         // Output images
-        let make_gbuffer = |format| AllocatedImage::color_attachment(
-            vk_ctx.clone(),
-            allocator.clone(),
-            format,
-            vk::Extent3D {
-                width: 1,
-                height: 1,
-                depth: 1,
-            },
-            vk::ImageViewType::_2D,
-            1,
-            1,
-        );
+        let make_gbuffer = |format| {
+            AllocatedImage::color_attachment(
+                vk_ctx.clone(),
+                allocator.clone(),
+                format,
+                vk::Extent3D {
+                    width: 1,
+                    height: 1,
+                    depth: 1,
+                },
+                vk::ImageViewType::_2D,
+                1,
+                1,
+            )
+        };
 
         let out_positions = make_gbuffer(vk::Format::R32G32B32A32_SFLOAT);
         let out_normals = make_gbuffer(vk::Format::R32G32B32A32_SFLOAT);
@@ -469,17 +479,19 @@ impl GeometryPass {
     }
 
     pub fn render(&self, vk_ctx: VulkanContext) {
-        let make_attachment = |view| vk::RenderingAttachmentInfoBuilder::new()
-            .image_view(view)
-            .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .clear_value(vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 0.0],
-                },
-            })
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .resolve_image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+        let make_attachment = |view| {
+            vk::RenderingAttachmentInfoBuilder::new()
+                .image_view(view)
+                .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .clear_value(vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 0.0],
+                    },
+                })
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .resolve_image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        };
         let colour_attachments = vec![
             make_attachment(self.out_positions.view),
             make_attachment(self.out_normals.view),
@@ -503,13 +515,11 @@ impl GeometryPass {
             device.cmd_set_viewport(
                 command_buffer,
                 0,
-                &[
-                    vk::ViewportBuilder::new()
-                        .width(self.output_extent.width as _)
-                        .height(self.output_extent.height as _)
-                        .min_depth(0.0)
-                        .max_depth(1.0),
-                ],
+                &[vk::ViewportBuilder::new()
+                    .width(self.output_extent.width as _)
+                    .height(self.output_extent.height as _)
+                    .min_depth(0.0)
+                    .max_depth(1.0)],
             );
             device.cmd_begin_rendering(command_buffer, &rendering_info);
             device.cmd_bind_pipeline(
@@ -517,12 +527,7 @@ impl GeometryPass {
                 vk::PipelineBindPoint::GRAPHICS,
                 self.graphics_pipeline,
             );
-            device.cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &[self.vertex_buffer.buffer],
-                &[0],
-            );
+            device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.vertex_buffer.buffer], &[0]);
             device.cmd_bind_index_buffer(
                 command_buffer,
                 self.index_buffer.buffer,

@@ -22,10 +22,7 @@ pub struct CameraUniform {
 }
 
 impl CameraUniform {
-    pub fn create_buffer(
-        self,
-        allocator: Arc<RwLock<vma::Allocator>>,
-    ) -> AllocatedBuffer<Self> {
+    pub fn create_buffer(self, allocator: Arc<RwLock<vma::Allocator>>) -> AllocatedBuffer<Self> {
         let buffer_info = vk::BufferCreateInfoBuilder::new()
             .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
