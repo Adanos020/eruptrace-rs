@@ -1,4 +1,4 @@
-//use eruptrace_vk::AllocatedBuffer;
+// use eruptrace_vk::AllocatedBuffer;
 
 #[derive(Clone)]
 pub struct LightingPass {

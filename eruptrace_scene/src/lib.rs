@@ -1,5 +1,6 @@
 #![feature(iter_partition_in_place)]
 #![feature(total_cmp)]
+#![allow(clippy::no_effect)]
 
 pub mod bih;
 pub mod camera;
@@ -7,9 +8,15 @@ pub mod json;
 pub mod materials;
 pub mod mesh;
 
-pub use camera::Camera;
+pub use bih::*;
+pub use camera::*;
+pub use materials::*;
+pub use mesh::*;
 
-use crate::{bih::Bih, json::to_vec3, materials::*, mesh::*};
+use crate::json::to_vec3;
+use erupt::{vk, DeviceLoader};
+use eruptrace_vk::{AllocatedBuffer, AllocatedImage, VulkanContext};
+use image::EncodableLayout;
 use itertools::Itertools;
 use nalgebra_glm as glm;
 use serde_json as js;
@@ -17,6 +24,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use vk_mem_erupt as vma;
 
 #[derive(Clone)]
 pub struct Scene {
@@ -26,6 +34,16 @@ pub struct Scene {
     pub texture_paths: Vec<PathBuf>,
     pub normal_map_paths: Vec<PathBuf>,
     pub bih: Bih,
+}
+
+#[derive(Clone)]
+pub struct SceneBuffers {
+    pub textures_image: AllocatedImage,
+    pub normal_maps_image: AllocatedImage,
+    pub materials_buffer: AllocatedBuffer<MaterialUniform>,
+    pub triangles_buffer: AllocatedBuffer<TriangleUniform>,
+    pub bih_buffer: AllocatedBuffer<BihNodeUniform>,
+    pub n_triangles: u32,
 }
 
 impl Scene {
@@ -134,5 +152,97 @@ impl Scene {
         };
 
         Ok((camera, scene))
+    }
+
+    pub fn create_buffers(self, vk_ctx: VulkanContext) -> SceneBuffers {
+        let n_textures = self.texture_paths.len();
+        let n_normal_maps = self.normal_map_paths.len();
+        let n_triangles = self.meshes.len() as u32;
+        let textures = self
+            .texture_paths
+            .into_iter()
+            .map(|path| image::open(path).unwrap().into_rgba8())
+            .flat_map(|texture| Vec::from(texture.as_bytes()))
+            .collect_vec();
+        let normal_maps = self
+            .normal_map_paths
+            .into_iter()
+            .map(|path| image::open(path).unwrap().into_rgba8())
+            .flat_map(|texture| Vec::from(texture.as_bytes()))
+            .collect_vec();
+        let materials = self
+            .materials
+            .into_iter()
+            .map(Material::into_uniform)
+            .collect_vec();
+        let triangles = self
+            .triangles
+            .into_iter()
+            .map(Triangle::into_uniform)
+            .collect_vec();
+        let bih = self
+            .bih
+            .0
+            .into_iter()
+            .map(BihNode::into_uniform)
+            .collect_vec();
+
+        let image_extent = vk::Extent3D {
+            width: 1024,
+            height: 1024,
+            depth: 1,
+        };
+
+        let buffer_info = vk::BufferCreateInfoBuilder::new()
+            .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        SceneBuffers {
+            textures_image: AllocatedImage::texture(
+                vk_ctx.clone(),
+                image_extent,
+                vk::ImageViewType::_2D_ARRAY,
+                1,
+                n_textures as u32,
+                &textures,
+            ),
+            normal_maps_image: AllocatedImage::texture(
+                vk_ctx.clone(),
+                image_extent,
+                vk::ImageViewType::_2D_ARRAY,
+                1,
+                n_normal_maps as u32,
+                &normal_maps,
+            ),
+            materials_buffer: AllocatedBuffer::with_data(
+                vk_ctx.allocator.clone(),
+                &buffer_info,
+                vma::MemoryUsage::CpuToGpu,
+                &materials,
+            ),
+            triangles_buffer: AllocatedBuffer::with_data(
+                vk_ctx.allocator.clone(),
+                &buffer_info,
+                vma::MemoryUsage::CpuToGpu,
+                &triangles,
+            ),
+            bih_buffer: AllocatedBuffer::with_data(
+                vk_ctx.allocator,
+                &buffer_info,
+                vma::MemoryUsage::CpuToGpu,
+                &bih,
+            ),
+            n_triangles,
+        }
+    }
+}
+
+impl SceneBuffers {
+    pub fn destroy(&self, device: &DeviceLoader) {
+        self.textures_image.destroy(device);
+        self.normal_maps_image.destroy(device);
+        self.materials_buffer.destroy();
+        self.triangles_buffer.destroy();
+        self.bih_buffer.destroy();
     }
 }

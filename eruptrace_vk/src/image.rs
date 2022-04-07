@@ -20,7 +20,6 @@ pub struct AllocatedImage {
 impl AllocatedImage {
     pub fn new(
         vk_ctx: VulkanContext,
-        allocator: Arc<RwLock<vma::Allocator>>,
         image_info: vk::ImageCreateInfoBuilder,
         view_type: vk::ImageViewType,
         subresource_range: vk::ImageSubresourceRange,
@@ -32,7 +31,8 @@ impl AllocatedImage {
             ..Default::default()
         };
 
-        let (image, allocation, allocation_info) = allocator
+        let (image, allocation, allocation_info) = vk_ctx
+            .allocator
             .read()
             .unwrap()
             .create_image(
@@ -67,7 +67,7 @@ impl AllocatedImage {
             extent: image_info.extent,
             array_layers: image_info.array_layers,
             mip_levels: image_info.mip_levels,
-            allocator,
+            allocator: vk_ctx.allocator,
             allocation,
             allocation_info,
         }
@@ -75,21 +75,14 @@ impl AllocatedImage {
 
     pub fn with_data<T: Sized>(
         vk_ctx: VulkanContext,
-        allocator: Arc<RwLock<vma::Allocator>>,
         image_info: vk::ImageCreateInfoBuilder,
         view_type: vk::ImageViewType,
         range: vk::ImageSubresourceRange,
         data: &[T],
     ) -> Self {
-        let this = Self::new(
-            vk_ctx.clone(),
-            allocator.clone(),
-            image_info,
-            view_type,
-            range,
-        );
-        this.set_data(vk_ctx, data);
-        allocator.read().unwrap().flush_allocation(
+        let this = Self::new(vk_ctx.clone(), image_info, view_type, range);
+        this.set_data(vk_ctx.clone(), data);
+        vk_ctx.allocator.read().unwrap().flush_allocation(
             &this.allocation,
             0,
             std::mem::size_of::<T>() * data.len(),
@@ -99,7 +92,6 @@ impl AllocatedImage {
 
     pub fn texture(
         vk_ctx: VulkanContext,
-        allocator: Arc<RwLock<vma::Allocator>>,
         extent: vk::Extent3D,
         view_type: vk::ImageViewType,
         mip_levels: u32,
@@ -123,19 +115,17 @@ impl AllocatedImage {
             .layer_count(array_layers)
             .build();
 
-        let this = Self::new(vk_ctx.clone(), allocator, image_info, view_type, range);
+        let this = Self::new(vk_ctx.clone(), image_info, view_type, range);
         this.set_data(vk_ctx, texture_data);
-        this.allocator.read().unwrap().flush_allocation(
-            &this.allocation,
-            0,
-            texture_data.len(),
-        );
+        this.allocator
+            .read()
+            .unwrap()
+            .flush_allocation(&this.allocation, 0, texture_data.len());
         this
     }
 
     pub fn color_attachment(
         vk_ctx: VulkanContext,
-        allocator: Arc<RwLock<vma::Allocator>>,
         format: vk::Format,
         extent: vk::Extent3D,
         view_type: vk::ImageViewType,
@@ -160,7 +150,7 @@ impl AllocatedImage {
             .layer_count(array_layers)
             .build();
 
-        Self::new(vk_ctx, allocator, image_info, view_type, range)
+        Self::new(vk_ctx, image_info, view_type, range)
     }
 
     pub fn destroy(&self, device: &DeviceLoader) {

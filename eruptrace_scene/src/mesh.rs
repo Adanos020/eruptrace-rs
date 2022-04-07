@@ -5,6 +5,7 @@ use crate::{
 use itertools::Itertools;
 use nalgebra_glm as glm;
 use serde_json as js;
+use std140::repr_std140;
 
 #[derive(Clone, Debug)]
 pub struct Triangle {
@@ -12,6 +13,15 @@ pub struct Triangle {
     pub normals: [glm::Vec3; 3],
     pub texcoords: [glm::Vec2; 3],
     pub material_index: u32,
+}
+
+#[repr_std140]
+#[derive(Clone, Debug)]
+pub struct TriangleUniform {
+    pub positions: std140::array<std140::vec3, 3>,
+    pub normals: std140::array<std140::vec3, 3>,
+    pub texcoords: std140::array<std140::vec2, 3>,
+    pub material_index: std140::uint,
 }
 
 #[derive(Clone, Debug)]
@@ -26,59 +36,49 @@ pub struct Mesh {
 
 impl Mesh {
     pub fn from_json(object: &js::Value, material_names: &[String]) -> anyhow::Result<Self> {
-        let positions: Vec<glm::Vec3> = object["positions"]
+        let positions = object["positions"]
             .as_array()
             .unwrap()
             .iter()
-            .filter(|p| p.is_array())
-            .map(to_vec3)
-            .collect();
+            .filter_map(to_vec3)
+            .collect_vec();
 
-        let normals: Vec<glm::Vec3> = object["normals"]
+        let normals = object["normals"]
             .as_array()
             .unwrap()
             .iter()
-            .filter(|p| p.is_array())
-            .map(to_vec3)
-            .collect();
+            .filter_map(to_vec3)
+            .collect_vec();
 
-        let texcoords: Vec<glm::Vec2> = object["texcoords"]
+        let texcoords = object["texcoords"]
             .as_array()
             .unwrap()
             .iter()
-            .filter(|p| p.is_array())
-            .map(to_vec2)
-            .collect();
+            .filter_map(to_vec2)
+            .collect_vec();
 
-        let indices: Vec<u32> = object["indices"]
+        let indices = object["indices"]
             .as_array()
             .unwrap()
             .iter()
-            .filter(|p| p.is_u64())
-            .map(|p| p.as_u64().unwrap_or(0) as u32)
-            .collect();
+            .filter_map(serde_json::Value::as_u64)
+            .map(|i| i as u32)
+            .collect_vec();
 
         let transform: glm::Mat4x4 = match object["transform"].as_object() {
             Some(object) => {
-                let get_transform = |name, func: &dyn Fn(&glm::Vec3) -> glm::Mat4x4| match object
-                    .get(name)
-                    .and_then(|a| a.as_array())
-                {
-                    Some(arr) => {
-                        let vector = glm::vec3(
-                            arr[0].as_f64().unwrap() as f32,
-                            arr[1].as_f64().unwrap() as f32,
-                            arr[2].as_f64().unwrap() as f32,
-                        );
-                        func(&vector)
-                    }
-                    None => glm::identity(),
+                let get_transform = |name, func: &dyn Fn(&glm::Vec3) -> glm::Mat4x4| {
+                    object
+                        .get(name)
+                        .and_then(to_vec3)
+                        .map(|vector| func(&vector))
+                        .unwrap_or_else(glm::identity)
                 };
                 let translation = get_transform("position", &glm::translation::<f32>);
                 let rotation = get_transform("rotation", &|vec| {
-                    let rot_x = glm::rotation(vec[0].to_radians(), &glm::vec3(1.0, 0.0, 0.0));
-                    let rot_y = glm::rotation(vec[1].to_radians(), &glm::vec3(0.0, 1.0, 0.0));
-                    let rot_z = glm::rotation(vec[2].to_radians(), &glm::vec3(0.0, 0.0, 1.0));
+                    let rot_x = glm::rotation(vec.x.to_radians(), &glm::vec3(1.0, 0.0, 0.0));
+                    let rot_y = glm::rotation(vec.y.to_radians(), &glm::vec3(0.0, 1.0, 0.0));
+                    let rot_z = glm::rotation(vec.z.to_radians(), &glm::vec3(0.0, 0.0, 1.0));
                     rot_z * rot_y * rot_x
                 });
                 let scale = get_transform("scale", &glm::scaling::<f32>);
@@ -133,15 +133,36 @@ impl Triangle {
         let [a, b, c] = self.positions;
         BoundingBox {
             min: glm::vec3(
-                a[0].min(b[0]).min(c[0]),
-                a[1].min(b[1]).min(c[1]),
-                a[2].min(b[2]).min(c[2]),
+                a.x.min(b.x).min(c.x),
+                a.y.min(b.y).min(c.y),
+                a.z.min(b.z).min(c.z),
             ),
             max: glm::vec3(
-                a[0].max(b[0]).max(c[0]),
-                a[1].max(b[1]).max(c[1]),
-                a[2].max(b[2]).max(c[2]),
+                a.x.max(b.x).max(c.x),
+                a.y.max(b.y).max(c.y),
+                a.z.max(b.z).max(c.z),
             ),
+        }
+    }
+
+    pub fn into_uniform(self) -> TriangleUniform {
+        TriangleUniform {
+            positions: std140::array![
+                eruptrace_vk::std140::vec3(&self.positions[0]),
+                eruptrace_vk::std140::vec3(&self.positions[1]),
+                eruptrace_vk::std140::vec3(&self.positions[2]),
+            ],
+            normals: std140::array![
+                eruptrace_vk::std140::vec3(&self.normals[0]),
+                eruptrace_vk::std140::vec3(&self.normals[1]),
+                eruptrace_vk::std140::vec3(&self.normals[2]),
+            ],
+            texcoords: std140::array![
+                eruptrace_vk::std140::vec2(&self.texcoords[0]),
+                eruptrace_vk::std140::vec2(&self.texcoords[1]),
+                eruptrace_vk::std140::vec2(&self.texcoords[2]),
+            ],
+            material_index: std140::uint(self.material_index),
         }
     }
 }

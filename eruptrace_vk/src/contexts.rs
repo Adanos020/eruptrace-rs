@@ -1,9 +1,11 @@
 use erupt::{vk, DeviceLoader};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
+use vk_mem_erupt as vma;
 
 #[derive(Clone)]
 pub struct VulkanContext {
     pub device: Arc<DeviceLoader>,
+    pub allocator: Arc<RwLock<vma::Allocator>>,
     pub queue: vk::Queue,
     pub command_pool: vk::CommandPool,
     pub upload_fence: vk::Fence,

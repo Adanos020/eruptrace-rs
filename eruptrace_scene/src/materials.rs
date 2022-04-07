@@ -1,4 +1,5 @@
 use serde_json as json;
+use std140::repr_std140;
 
 #[repr(u32)]
 #[derive(Copy, Clone, Debug)]
@@ -20,6 +21,15 @@ pub struct Material {
     /// - Refractive: refractive index
     /// - Emitting: intensity
     pub parameter: f32,
+}
+
+#[repr_std140]
+#[derive(Copy, Clone, Debug)]
+pub struct MaterialUniform {
+    pub material_type: std140::uint,
+    pub texture_index: std140::uint,
+    pub normal_map_index: std140::uint,
+    pub parameter: std140::float,
 }
 
 impl From<&str> for MaterialType {
@@ -65,5 +75,14 @@ impl Material {
             normal_map_index,
             parameter,
         })
+    }
+
+    pub fn into_uniform(self) -> MaterialUniform {
+        MaterialUniform {
+            material_type: std140::uint(self.material_type as u32),
+            texture_index: std140::uint(self.texture_index),
+            normal_map_index: std140::uint(self.normal_map_index),
+            parameter: std140::float(self.parameter),
+        }
     }
 }

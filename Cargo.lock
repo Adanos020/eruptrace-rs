@@ -425,10 +425,14 @@ name = "eruptrace_scene"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "erupt",
+ "eruptrace_vk",
+ "image",
  "itertools",
  "nalgebra-glm",
  "serde_json",
  "std140",
+ "vk-mem-erupt",
 ]
 
 [[package]]
@@ -436,6 +440,7 @@ name = "eruptrace_vk"
 version = "0.1.0"
 dependencies = [
  "erupt",
+ "itertools",
  "nalgebra-glm",
  "num-integer",
  "std140",

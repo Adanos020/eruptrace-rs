@@ -9,6 +9,7 @@ edition = "2021"
 erupt = "0.22"
 vk-mem-erupt = { git = "https://github.com/HindrikStegenga/vk-mem-erupt" }
 
+itertools = "0.10"
 num-integer = "0.1"
 nalgebra-glm = "0.16"
 std140 = "0.2"

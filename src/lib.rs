@@ -203,8 +203,8 @@ impl App {
         };
 
         let render_surface = Some(RenderSurface::new(
-            allocator.as_ref().unwrap().clone(),
             VulkanContext {
+                allocator: allocator.as_ref().unwrap().clone(),
                 device: device.as_ref().unwrap().clone(),
                 queue,
                 command_pool,
@@ -217,8 +217,8 @@ impl App {
         )?);
 
         let pure_ray_tracer = Some(PureRayTracer::new(
-            allocator.as_ref().unwrap().clone(),
             VulkanContext {
+                allocator: allocator.as_ref().unwrap().clone(),
                 device: device.as_ref().unwrap().clone(),
                 queue,
                 command_pool,
@@ -232,15 +232,12 @@ impl App {
         ));
 
         let deferred_ray_tracer = Some(DeferredRayTracer::new(
-            allocator.as_ref().unwrap().clone(),
             VulkanContext {
+                allocator: allocator.as_ref().unwrap().clone(),
                 device: device.as_ref().unwrap().clone(),
                 queue,
                 command_pool,
                 upload_fence,
-            },
-            PipelineContext {
-                surface_format: format,
             },
             camera,
             scene,
@@ -268,18 +265,20 @@ impl App {
     }
 
     pub fn resize(&mut self, extent: vk::Extent2D) {
+        let vk_ctx = VulkanContext {
+            allocator: self.allocator.as_ref().unwrap().clone(),
+            device: self.device.as_ref().unwrap().clone(),
+            queue: self.queue,
+            command_pool: self.command_pool,
+            upload_fence: self.upload_fence,
+        };
+
         self.swapchain.update(extent);
         self.camera.img_size = [extent.width, extent.height];
         self.render_surface
             .as_mut()
             .unwrap()
-            .update_image_size(VulkanContext {
-                device: self.device.as_ref().unwrap().clone(),
-                queue: self.queue,
-                command_pool: self.command_pool,
-                upload_fence: self.upload_fence,
-            },
-            extent);
+            .update_image_size(vk_ctx.clone(), extent);
         self.pure_ray_tracer
             .as_mut()
             .unwrap()
@@ -287,7 +286,12 @@ impl App {
         self.deferred_ray_tracer
             .as_mut()
             .unwrap()
-            .update_camera(self.camera);
+            .update_camera(vk_ctx.clone(), self.camera);
+
+        self.deferred_ray_tracer.as_mut().unwrap().render(
+            vk_ctx,
+            self.render_surface.as_ref().unwrap().render_image.view,
+        );
     }
 
     pub fn render(&mut self) {

@@ -3,6 +3,7 @@ pub mod command;
 pub mod contexts;
 pub mod debug;
 pub mod image;
+pub mod pipeline;
 pub mod shader;
 pub mod std140;
 

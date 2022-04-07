@@ -1,5 +1,6 @@
 use crate::Triangle;
 use nalgebra_glm as glm;
+use std140::repr_std140;
 
 #[derive(Copy, Clone, Debug)]
 pub struct BoundingBox {
@@ -34,6 +35,16 @@ pub enum BihNodeType {
 pub struct BihNode {
     pub ty: BihNodeType,
     pub data: BihNodeData,
+}
+
+#[repr_std140]
+#[derive(Copy, Clone, Debug)]
+pub struct BihNodeUniform {
+    pub node_type: std140::uint,
+    pub child_left: std140::uint,
+    pub child_right: std140::uint,
+    pub clip_left: std140::float,
+    pub clip_right: std140::float,
 }
 
 #[derive(Clone, Debug)]
@@ -80,6 +91,35 @@ impl Bih {
             nodes.shrink_to_fit();
         }
         Self(nodes)
+    }
+}
+
+impl BihNode {
+    pub fn into_uniform(self) -> BihNodeUniform {
+        match self.data {
+            BihNodeData::Branch {
+                clip_left,
+                clip_right,
+                child_left,
+                child_right,
+            } => BihNodeUniform {
+                node_type: std140::uint(self.ty as u32),
+                child_left: std140::uint(child_left as u32),
+                child_right: std140::uint(child_right as u32),
+                clip_left: std140::float(clip_left),
+                clip_right: std140::float(clip_right),
+            },
+            BihNodeData::Leaf {
+                triangle_index,
+                count,
+            } => BihNodeUniform {
+                node_type: std140::uint(self.ty as u32),
+                child_left: std140::uint(triangle_index as u32),
+                child_right: std140::uint(count as u32),
+                clip_left: std140::float(0.0),
+                clip_right: std140::float(0.0),
+            },
+        }
     }
 }
 
