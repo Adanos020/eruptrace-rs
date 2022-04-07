@@ -1,35 +1,37 @@
-use crate::{shader::make_shader_module, VulkanContext};
+use std::ffi::CString;
+
 use erupt::{vk, DeviceLoader, ExtendableFrom, SmallVec};
 use itertools::Itertools;
-use std::ffi::CString;
+
+use crate::{shader::make_shader_module, VulkanContext};
 
 #[derive(Clone, Debug)]
 pub struct GraphicsPipeline {
-    pub samplers: Vec<vk::Sampler>,
+    pub samplers:               Vec<vk::Sampler>,
     pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
-    pub descriptor_pool: vk::DescriptorPool,
-    pub descriptor_sets: SmallVec<vk::DescriptorSet>,
-    pub layout: vk::PipelineLayout,
-    pub pipeline: vk::Pipeline,
+    pub descriptor_pool:        vk::DescriptorPool,
+    pub descriptor_sets:        SmallVec<vk::DescriptorSet>,
+    pub layout:                 vk::PipelineLayout,
+    pub pipeline:               vk::Pipeline,
 }
 
 #[derive(Clone, Debug)]
 pub struct GraphicsPipelineCreateInfo<'a> {
-    pub vertex_shader: &'static [u8],
-    pub fragment_shader: &'static [u8],
-    pub color_attachment_infos: Vec<ColorAttachmentInfo>,
-    pub push_constant_ranges: Vec<vk::PushConstantRangeBuilder<'a>>,
-    pub input_assembly: vk::PipelineInputAssemblyStateCreateInfoBuilder<'a>,
-    pub vertex_input_bindings: Vec<vk::VertexInputBindingDescriptionBuilder<'a>>,
+    pub vertex_shader:           &'static [u8],
+    pub fragment_shader:         &'static [u8],
+    pub color_attachment_infos:  Vec<ColorAttachmentInfo>,
+    pub push_constant_ranges:    Vec<vk::PushConstantRangeBuilder<'a>>,
+    pub input_assembly:          vk::PipelineInputAssemblyStateCreateInfoBuilder<'a>,
+    pub vertex_input_bindings:   Vec<vk::VertexInputBindingDescriptionBuilder<'a>>,
     pub vertex_input_attributes: Vec<vk::VertexInputAttributeDescriptionBuilder<'a>>,
-    pub rasterisation_state: RasterisationStateInfo,
-    pub descriptor_sets_infos: Vec<DescriptorSetCreateInfo<'a>>,
-    pub sampler_infos: Vec<SamplerCreateInfo>,
+    pub rasterisation_state:     RasterisationStateInfo,
+    pub descriptor_sets_infos:   Vec<DescriptorSetCreateInfo<'a>>,
+    pub sampler_infos:           Vec<SamplerCreateInfo>,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct RasterisationStateInfo {
-    pub cull_mode: vk::CullModeFlags,
+    pub cull_mode:  vk::CullModeFlags,
     pub front_face: vk::FrontFace,
 }
 
@@ -40,23 +42,23 @@ pub struct DescriptorSetCreateInfo<'a> {
 
 #[derive(Copy, Clone, Debug)]
 pub struct DescriptorBindingCreateInfo<'a> {
-    pub descriptor_type: vk::DescriptorType,
+    pub descriptor_type:    vk::DescriptorType,
     pub shader_stage_flags: vk::ShaderStageFlags,
-    pub buffer_info: Option<vk::DescriptorBufferInfoBuilder<'a>>,
-    pub image_info: Option<vk::DescriptorImageInfoBuilder<'a>>,
-    pub sampler_index: Option<usize>,
+    pub buffer_info:        Option<vk::DescriptorBufferInfoBuilder<'a>>,
+    pub image_info:         Option<vk::DescriptorImageInfoBuilder<'a>>,
+    pub sampler_index:      Option<usize>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ColorAttachmentInfo {
-    pub format: vk::Format,
+    pub format:           vk::Format,
     pub color_write_mask: vk::ColorComponentFlags,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct SamplerCreateInfo {
     pub address_mode: vk::SamplerAddressMode,
-    pub filter: vk::Filter,
+    pub filter:       vk::Filter,
 }
 
 impl GraphicsPipeline {
@@ -71,12 +73,7 @@ impl GraphicsPipeline {
                     .address_mode_w(info.address_mode)
                     .min_filter(info.filter)
                     .mag_filter(info.filter);
-                unsafe {
-                    vk_ctx
-                        .device
-                        .create_sampler(&create_info, None)
-                        .expect("Cannot create sampler")
-                }
+                unsafe { vk_ctx.device.create_sampler(&create_info, None).expect("Cannot create sampler") }
             })
             .collect_vec();
 
@@ -113,21 +110,10 @@ impl GraphicsPipeline {
                 .flat_map(|set_info| set_info.descriptor_infos.iter())
                 .map(|bind_info| bind_info.descriptor_type)
                 .dedup()
-                .map(|descriptor_type| {
-                    vk::DescriptorPoolSizeBuilder::new()
-                        ._type(descriptor_type)
-                        .descriptor_count(10)
-                })
+                .map(|descriptor_type| vk::DescriptorPoolSizeBuilder::new()._type(descriptor_type).descriptor_count(10))
                 .collect_vec();
-            let create_info = vk::DescriptorPoolCreateInfoBuilder::new()
-                .max_sets(10)
-                .pool_sizes(&sizes);
-            unsafe {
-                vk_ctx
-                    .device
-                    .create_descriptor_pool(&create_info, None)
-                    .expect("Cannot create descriptor pool")
-            }
+            let create_info = vk::DescriptorPoolCreateInfoBuilder::new().max_sets(10).pool_sizes(&sizes);
+            unsafe { vk_ctx.device.create_descriptor_pool(&create_info, None).expect("Cannot create descriptor pool") }
         };
 
         let descriptor_sets = unsafe {
@@ -149,18 +135,10 @@ impl GraphicsPipeline {
             let mut image_infos = Vec::new();
             let mut first_binding = 0u32;
             for (i, binding_info) in set_info.descriptor_infos.iter().enumerate() {
-                assert_ne!(
-                    binding_info.buffer_info.is_some(),
-                    binding_info.image_info.is_some()
-                );
-                assert_eq!(
-                    binding_info.image_info.is_some(),
-                    binding_info.sampler_index.is_some()
-                );
+                assert_ne!(binding_info.buffer_info.is_some(), binding_info.image_info.is_some());
+                assert_eq!(binding_info.image_info.is_some(), binding_info.sampler_index.is_some());
 
-                if curr_type != binding_info.descriptor_type
-                    || curr_is_image != binding_info.image_info.is_some()
-                {
+                if curr_type != binding_info.descriptor_type || curr_is_image != binding_info.image_info.is_some() {
                     descriptor_writes_data.push((
                         set,
                         first_binding,
@@ -204,25 +182,21 @@ impl GraphicsPipeline {
 
         let descriptor_writes = descriptor_writes_data
             .iter()
-            .map(
-                |(set, first_binding, descriptor_type, is_image, buffer_infos, image_infos)| {
-                    let write = vk::WriteDescriptorSetBuilder::new()
-                        .dst_binding(*first_binding)
-                        .dst_set(descriptor_sets[*set])
-                        .descriptor_type(*descriptor_type);
-                    if *is_image {
-                        write.image_info(image_infos)
-                    } else {
-                        write.buffer_info(buffer_infos)
-                    }
-                },
-            )
+            .map(|(set, first_binding, descriptor_type, is_image, buffer_infos, image_infos)| {
+                let write = vk::WriteDescriptorSetBuilder::new()
+                    .dst_binding(*first_binding)
+                    .dst_set(descriptor_sets[*set])
+                    .descriptor_type(*descriptor_type);
+                if *is_image {
+                    write.image_info(image_infos)
+                } else {
+                    write.buffer_info(buffer_infos)
+                }
+            })
             .collect_vec();
 
         unsafe {
-            vk_ctx
-                .device
-                .update_descriptor_sets(&descriptor_writes, &[]);
+            vk_ctx.device.update_descriptor_sets(&descriptor_writes, &[]);
         }
 
         let vertex_shader = make_shader_module(&vk_ctx.device, create_info.vertex_shader);
@@ -255,21 +229,15 @@ impl GraphicsPipeline {
         let dynamic_pipeline_state = vk::PipelineDynamicStateCreateInfoBuilder::new()
             .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
 
-        let viewport_state = vk::PipelineViewportStateCreateInfoBuilder::new()
-            .viewport_count(1)
-            .scissor_count(1);
+        let viewport_state = vk::PipelineViewportStateCreateInfoBuilder::new().viewport_count(1).scissor_count(1);
 
         let multisample_state = vk::PipelineMultisampleStateCreateInfoBuilder::new()
             .sample_shading_enable(false)
             .rasterization_samples(vk::SampleCountFlagBits::_1);
 
-        let color_attachment_formats = create_info
-            .color_attachment_infos
-            .iter()
-            .map(|info| info.format)
-            .collect_vec();
-        let mut pipeline_rendering_info = vk::PipelineRenderingCreateInfoBuilder::new()
-            .color_attachment_formats(&color_attachment_formats);
+        let color_attachment_formats = create_info.color_attachment_infos.iter().map(|info| info.format).collect_vec();
+        let mut pipeline_rendering_info =
+            vk::PipelineRenderingCreateInfoBuilder::new().color_attachment_formats(&color_attachment_formats);
 
         let colour_blend_attachments = create_info
             .color_attachment_infos
@@ -321,14 +289,7 @@ impl GraphicsPipeline {
             vk_ctx.device.destroy_shader_module(fragment_shader, None);
         }
 
-        GraphicsPipeline {
-            samplers,
-            descriptor_set_layouts,
-            descriptor_pool,
-            descriptor_sets,
-            layout,
-            pipeline,
-        }
+        GraphicsPipeline { samplers, descriptor_set_layouts, descriptor_pool, descriptor_sets, layout, pipeline }
     }
 
     pub fn destroy(&self, device: &DeviceLoader) {

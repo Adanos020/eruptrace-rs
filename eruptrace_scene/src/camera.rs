@@ -1,33 +1,35 @@
-use crate::to_vec3;
+use std::sync::{Arc, RwLock};
+
 use erupt::vk;
 use eruptrace_vk::AllocatedBuffer;
 use nalgebra_glm as glm;
 use serde_json as js;
-use std::sync::{Arc, RwLock};
 use std140::repr_std140;
 use vk_mem_erupt as vma;
 
+use crate::to_vec3;
+
 #[derive(Copy, Clone, Debug)]
 pub struct Camera {
-    pub position: glm::Vec3,
-    pub look_at: glm::Vec3,
-    pub up: glm::Vec3,
-    pub vertical_fov: f32,
-    pub img_size: [u32; 2],
-    pub samples: u32,
+    pub position:        glm::Vec3,
+    pub look_at:         glm::Vec3,
+    pub up:              glm::Vec3,
+    pub vertical_fov:    f32,
+    pub img_size:        [u32; 2],
+    pub samples:         u32,
     pub max_reflections: u32,
 }
 
 #[repr_std140]
 #[derive(Copy, Clone, Debug)]
 pub struct CameraUniform {
-    position: std140::vec4,
-    horizontal: std140::vec4,
-    vertical: std140::vec4,
-    bottom_left: std140::vec4,
-    img_size: std140::vec2,
-    img_size_inv: std140::vec2,
-    pub samples: std140::uint,
+    position:            std140::vec4,
+    horizontal:          std140::vec4,
+    vertical:            std140::vec4,
+    bottom_left:         std140::vec4,
+    img_size:            std140::vec2,
+    img_size_inv:        std140::vec2,
+    pub samples:         std140::uint,
     pub max_reflections: std140::uint,
 }
 
@@ -40,15 +42,7 @@ impl Camera {
         let samples = object["samples"].as_u64().unwrap_or(1) as u32;
         let max_reflections = object["max_reflections"].as_u64().unwrap_or(1) as u32;
 
-        Ok(Camera {
-            position,
-            look_at,
-            up,
-            img_size: [0, 0],
-            vertical_fov,
-            samples,
-            max_reflections,
-        })
+        Ok(Camera { position, look_at, up, img_size: [0, 0], vertical_fov, samples, max_reflections })
     }
 
     pub fn into_uniform(self) -> CameraUniform {
@@ -70,13 +64,13 @@ impl Camera {
         let vertical = 2.0 * half_height * focus_distance * v;
 
         CameraUniform {
-            position: std140::vec4(self.position.x, self.position.y, self.position.z, 0.0),
-            horizontal: std140::vec4(horizontal.x, horizontal.y, horizontal.z, 0.0),
-            vertical: std140::vec4(vertical.x, vertical.y, vertical.z, 0.0),
-            bottom_left: std140::vec4(bottom_left.x, bottom_left.y, bottom_left.z, 0.0),
-            img_size: std140::vec2(img_size.x, img_size.y),
-            img_size_inv: std140::vec2(1.0 / img_size.x, 1.0 / img_size.y),
-            samples: std140::uint(self.samples),
+            position:        std140::vec4(self.position.x, self.position.y, self.position.z, 0.0),
+            horizontal:      std140::vec4(horizontal.x, horizontal.y, horizontal.z, 0.0),
+            vertical:        std140::vec4(vertical.x, vertical.y, vertical.z, 0.0),
+            bottom_left:     std140::vec4(bottom_left.x, bottom_left.y, bottom_left.z, 0.0),
+            img_size:        std140::vec2(img_size.x, img_size.y),
+            img_size_inv:    std140::vec2(1.0 / img_size.x, 1.0 / img_size.y),
+            samples:         std140::uint(self.samples),
             max_reflections: std140::uint(self.max_reflections),
         }
     }

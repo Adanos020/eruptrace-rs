@@ -1,33 +1,32 @@
-use crate::{command, AllocatedBuffer, VulkanContext};
-use erupt::{vk, DeviceLoader};
 use std::sync::{Arc, RwLock};
+
+use erupt::{vk, DeviceLoader};
 use vk_mem_erupt as vma;
+
+use crate::{command, AllocatedBuffer, VulkanContext};
 
 #[derive(Clone)]
 pub struct AllocatedImage {
-    pub image: vk::Image,
-    pub view: vk::ImageView,
+    pub image:             vk::Image,
+    pub view:              vk::ImageView,
     pub subresource_range: vk::ImageSubresourceRange,
-    pub extent: vk::Extent3D,
-    pub array_layers: u32,
-    pub mip_levels: u32,
+    pub extent:            vk::Extent3D,
+    pub array_layers:      u32,
+    pub mip_levels:        u32,
 
-    allocator: Arc<RwLock<vma::Allocator>>,
-    allocation: vma::Allocation,
+    allocator:           Arc<RwLock<vma::Allocator>>,
+    allocation:          vma::Allocation,
     pub allocation_info: vma::AllocationInfo,
 }
 
 impl AllocatedImage {
     pub fn new(
-        vk_ctx: VulkanContext,
-        image_info: vk::ImageCreateInfoBuilder,
-        view_type: vk::ImageViewType,
+        vk_ctx: VulkanContext, image_info: vk::ImageCreateInfoBuilder, view_type: vk::ImageViewType,
         subresource_range: vk::ImageSubresourceRange,
     ) -> Self {
         let allocation_info = vma::AllocationCreateInfo {
             usage: vma::MemoryUsage::GpuOnly,
-            flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
-                | vma::AllocationCreateFlags::MAPPED,
+            flags: vma::AllocationCreateFlags::DEDICATED_MEMORY | vma::AllocationCreateFlags::MAPPED,
             ..Default::default()
         };
 
@@ -35,10 +34,7 @@ impl AllocatedImage {
             .allocator
             .read()
             .unwrap()
-            .create_image(
-                &image_info.initial_layout(vk::ImageLayout::UNDEFINED),
-                &allocation_info,
-            )
+            .create_image(&image_info.initial_layout(vk::ImageLayout::UNDEFINED), &allocation_info)
             .expect("Cannot create image");
 
         let view_info = vk::ImageViewCreateInfoBuilder::new()
@@ -53,12 +49,7 @@ impl AllocatedImage {
             })
             .subresource_range(subresource_range);
 
-        let view = unsafe {
-            vk_ctx
-                .device
-                .create_image_view(&view_info, None)
-                .expect("Cannot create image view")
-        };
+        let view = unsafe { vk_ctx.device.create_image_view(&view_info, None).expect("Cannot create image view") };
 
         Self {
             image,
@@ -74,28 +65,17 @@ impl AllocatedImage {
     }
 
     pub fn with_data<T: Sized>(
-        vk_ctx: VulkanContext,
-        image_info: vk::ImageCreateInfoBuilder,
-        view_type: vk::ImageViewType,
-        range: vk::ImageSubresourceRange,
-        data: &[T],
+        vk_ctx: VulkanContext, image_info: vk::ImageCreateInfoBuilder, view_type: vk::ImageViewType,
+        range: vk::ImageSubresourceRange, data: &[T],
     ) -> Self {
         let this = Self::new(vk_ctx.clone(), image_info, view_type, range);
         this.set_data(vk_ctx.clone(), data);
-        vk_ctx.allocator.read().unwrap().flush_allocation(
-            &this.allocation,
-            0,
-            std::mem::size_of::<T>() * data.len(),
-        );
+        vk_ctx.allocator.read().unwrap().flush_allocation(&this.allocation, 0, std::mem::size_of::<T>() * data.len());
         this
     }
 
     pub fn texture(
-        vk_ctx: VulkanContext,
-        extent: vk::Extent3D,
-        view_type: vk::ImageViewType,
-        mip_levels: u32,
-        array_layers: u32,
+        vk_ctx: VulkanContext, extent: vk::Extent3D, view_type: vk::ImageViewType, mip_levels: u32, array_layers: u32,
         texture_data: &[u8],
     ) -> Self {
         let image_info = vk::ImageCreateInfoBuilder::new()
@@ -117,19 +97,12 @@ impl AllocatedImage {
 
         let this = Self::new(vk_ctx.clone(), image_info, view_type, range);
         this.set_data(vk_ctx, texture_data);
-        this.allocator
-            .read()
-            .unwrap()
-            .flush_allocation(&this.allocation, 0, texture_data.len());
+        this.allocator.read().unwrap().flush_allocation(&this.allocation, 0, texture_data.len());
         this
     }
 
     pub fn color_attachment(
-        vk_ctx: VulkanContext,
-        format: vk::Format,
-        extent: vk::Extent3D,
-        view_type: vk::ImageViewType,
-        mip_levels: u32,
+        vk_ctx: VulkanContext, format: vk::Format, extent: vk::Extent3D, view_type: vk::ImageViewType, mip_levels: u32,
         array_layers: u32,
     ) -> Self {
         let image_info = vk::ImageCreateInfoBuilder::new()
@@ -157,10 +130,7 @@ impl AllocatedImage {
         unsafe {
             device.destroy_image_view(self.view, None);
         }
-        self.allocator
-            .read()
-            .unwrap()
-            .destroy_image(self.image, &self.allocation);
+        self.allocator.read().unwrap().destroy_image(self.image, &self.allocation);
     }
 
     fn set_data<T>(&self, vk_ctx: VulkanContext, data: &[T]) {
@@ -168,12 +138,7 @@ impl AllocatedImage {
             let buffer_info = vk::BufferCreateInfoBuilder::new()
                 .usage(vk::BufferUsageFlags::TRANSFER_SRC)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            AllocatedBuffer::with_data(
-                self.allocator.clone(),
-                &buffer_info,
-                vma::MemoryUsage::CpuOnly,
-                data,
-            )
+            AllocatedBuffer::with_data(self.allocator.clone(), &buffer_info, vma::MemoryUsage::CpuOnly, data)
         };
 
         command::immediate_submit(vk_ctx, |device, command_buffer| unsafe {

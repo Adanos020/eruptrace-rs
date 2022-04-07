@@ -8,42 +8,43 @@ pub mod json;
 pub mod materials;
 pub mod mesh;
 
-pub use bih::*;
-pub use camera::*;
-pub use materials::*;
-pub use mesh::*;
-
-use crate::json::to_vec3;
-use erupt::{vk, DeviceLoader};
-use eruptrace_vk::{AllocatedBuffer, AllocatedImage, VulkanContext};
-use image::EncodableLayout;
-use itertools::Itertools;
-use nalgebra_glm as glm;
-use serde_json as js;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
+
+pub use bih::*;
+pub use camera::*;
+use erupt::{vk, DeviceLoader};
+use eruptrace_vk::{AllocatedBuffer, AllocatedImage, VulkanContext};
+use image::EncodableLayout;
+use itertools::Itertools;
+pub use materials::*;
+pub use mesh::*;
+use nalgebra_glm as glm;
+use serde_json as js;
 use vk_mem_erupt as vma;
+
+use crate::json::to_vec3;
 
 #[derive(Clone)]
 pub struct Scene {
-    pub meshes: Vec<Mesh>,
-    pub triangles: Vec<Triangle>,
-    pub materials: Vec<Material>,
-    pub texture_paths: Vec<PathBuf>,
+    pub meshes:           Vec<Mesh>,
+    pub triangles:        Vec<Triangle>,
+    pub materials:        Vec<Material>,
+    pub texture_paths:    Vec<PathBuf>,
     pub normal_map_paths: Vec<PathBuf>,
-    pub bih: Bih,
+    pub bih:              Bih,
 }
 
 #[derive(Clone)]
 pub struct SceneBuffers {
-    pub textures_image: AllocatedImage,
+    pub textures_image:    AllocatedImage,
     pub normal_maps_image: AllocatedImage,
-    pub materials_buffer: AllocatedBuffer<MaterialUniform>,
-    pub triangles_buffer: AllocatedBuffer<TriangleUniform>,
-    pub bih_buffer: AllocatedBuffer<BihNodeUniform>,
-    pub n_triangles: u32,
+    pub materials_buffer:  AllocatedBuffer<MaterialUniform>,
+    pub triangles_buffer:  AllocatedBuffer<TriangleUniform>,
+    pub bih_buffer:        AllocatedBuffer<BihNodeUniform>,
+    pub n_triangles:       u32,
 }
 
 impl Scene {
@@ -123,32 +124,21 @@ impl Scene {
             let mut meshes = Vec::with_capacity(meshes_and_triangles.len());
             let mut triangles = Vec::with_capacity(meshes_and_triangles.len());
             for (mesh, m_triangles) in meshes_and_triangles.into_iter() {
-                triangles.extend(m_triangles.into_iter().map(|t| {
-                    Triangle {
-                        positions: t
-                            .positions
-                            .map(|p| (mesh.transform * glm::vec4(p.x, p.y, p.z, 1.0)).xyz()),
-                        normals: t.normals.map(|n| {
-                            let normal_transform = glm::transpose(&glm::inverse(&mesh.transform));
-                            (normal_transform * glm::vec4(n.x, n.y, n.z, 1.0)).xyz()
-                        }),
-                        texcoords: t.texcoords,
-                        material_index: t.material_index,
-                    }
+                triangles.extend(m_triangles.into_iter().map(|t| Triangle {
+                    positions:      t.positions.map(|p| (mesh.transform * glm::vec4(p.x, p.y, p.z, 1.0)).xyz()),
+                    normals:        t.normals.map(|n| {
+                        let normal_transform = glm::transpose(&glm::inverse(&mesh.transform));
+                        (normal_transform * glm::vec4(n.x, n.y, n.z, 1.0)).xyz()
+                    }),
+                    texcoords:      t.texcoords,
+                    material_index: t.material_index,
                 }));
                 meshes.push(mesh);
             }
 
             let bih = Bih::new(&mut triangles);
 
-            Self {
-                meshes,
-                triangles,
-                materials,
-                texture_paths,
-                normal_map_paths,
-                bih,
-            }
+            Self { meshes, triangles, materials, texture_paths, normal_map_paths, bih }
         };
 
         Ok((camera, scene))
@@ -170,28 +160,11 @@ impl Scene {
             .map(|path| image::open(path).unwrap().into_rgba8())
             .flat_map(|texture| Vec::from(texture.as_bytes()))
             .collect_vec();
-        let materials = self
-            .materials
-            .into_iter()
-            .map(Material::into_uniform)
-            .collect_vec();
-        let triangles = self
-            .triangles
-            .into_iter()
-            .map(Triangle::into_uniform)
-            .collect_vec();
-        let bih = self
-            .bih
-            .0
-            .into_iter()
-            .map(BihNode::into_uniform)
-            .collect_vec();
+        let materials = self.materials.into_iter().map(Material::into_uniform).collect_vec();
+        let triangles = self.triangles.into_iter().map(Triangle::into_uniform).collect_vec();
+        let bih = self.bih.0.into_iter().map(BihNode::into_uniform).collect_vec();
 
-        let image_extent = vk::Extent3D {
-            width: 1024,
-            height: 1024,
-            depth: 1,
-        };
+        let image_extent = vk::Extent3D { width: 1024, height: 1024, depth: 1 };
 
         let buffer_info = vk::BufferCreateInfoBuilder::new()
             .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
@@ -226,12 +199,7 @@ impl Scene {
                 vma::MemoryUsage::CpuToGpu,
                 &triangles,
             ),
-            bih_buffer: AllocatedBuffer::with_data(
-                vk_ctx.allocator,
-                &buffer_info,
-                vma::MemoryUsage::CpuToGpu,
-                &bih,
-            ),
+            bih_buffer: AllocatedBuffer::with_data(vk_ctx.allocator, &buffer_info, vma::MemoryUsage::CpuToGpu, &bih),
             n_triangles,
         }
     }

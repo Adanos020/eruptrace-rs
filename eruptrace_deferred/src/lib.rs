@@ -4,10 +4,11 @@ pub mod geometry_pass;
 pub mod lighting_pass;
 pub mod shaders;
 
-use crate::{geometry_pass::GeometryPass, lighting_pass::LightingPass};
 use erupt::{vk, DeviceLoader};
 use eruptrace_scene::{Camera, Scene};
 use eruptrace_vk::VulkanContext;
+
+use crate::{geometry_pass::GeometryPass, lighting_pass::LightingPass};
 
 pub struct DeferredRayTracer {
     geometry_pass: GeometryPass,
