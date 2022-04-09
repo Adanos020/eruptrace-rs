@@ -306,3 +306,31 @@ impl GraphicsPipeline {
         }
     }
 }
+
+impl<'a> DescriptorBindingCreateInfo<'a> {
+    pub fn buffer(
+        descriptor_type: vk::DescriptorType, shader_stage_flags: vk::ShaderStageFlags,
+        buffer_info: vk::DescriptorBufferInfoBuilder<'a>,
+    ) -> Self {
+        Self {
+            descriptor_type,
+            shader_stage_flags,
+            buffer_info: Some(buffer_info),
+            image_info: None,
+            sampler_index: None,
+        }
+    }
+
+    pub fn image(
+        descriptor_type: vk::DescriptorType, shader_stage_flags: vk::ShaderStageFlags,
+        image_info: vk::DescriptorImageInfoBuilder<'a>, sampler_index: usize,
+    ) -> Self {
+        Self {
+            descriptor_type,
+            shader_stage_flags,
+            buffer_info: None,
+            image_info: Some(image_info),
+            sampler_index: Some(sampler_index),
+        }
+    }
+}

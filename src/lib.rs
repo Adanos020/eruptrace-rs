@@ -7,10 +7,11 @@ use erupt::{utils::surface, vk, DeviceLoader, EntryLoader, ExtendableFrom, Insta
 use erupt_bootstrap as vkb;
 use eruptrace_deferred::DeferredRayTracer;
 use eruptrace_pure::PureRayTracer;
-use eruptrace_scene::{camera::Camera, Scene};
+use eruptrace_scene::{camera::Camera, CameraUniform, Scene, SceneBuffers};
 use eruptrace_vk::{
     contexts::{FrameContext, PipelineContext, RenderContext, VulkanContext},
     debug::debug_callback,
+    AllocatedBuffer,
 };
 use vk_mem_erupt as vma;
 use winit::window::Window;
@@ -31,10 +32,14 @@ pub struct App {
     frames:                Vec<FrameContext>,
     upload_fence:          vk::Fence,
     allocator:             Option<Arc<RwLock<vma::Allocator>>>,
-    camera:                Camera,
-    render_surface:        Option<RenderSurface>,
-    pure_ray_tracer:       Option<PureRayTracer>,
-    deferred_ray_tracer:   Option<DeferredRayTracer>,
+
+    camera:           Camera,
+    rt_camera_buffer: Option<AllocatedBuffer<CameraUniform>>,
+    rt_scene_buffers: Option<SceneBuffers>,
+
+    render_surface:      Option<RenderSurface>,
+    pure_ray_tracer:     Option<PureRayTracer>,
+    deferred_ray_tracer: Option<DeferredRayTracer>,
 }
 
 impl App {
@@ -173,41 +178,37 @@ impl App {
             Some(Arc::new(RwLock::new(allocator)))
         };
 
+        let vk_ctx = VulkanContext {
+            allocator: allocator.as_ref().unwrap().clone(),
+            device: device.as_ref().unwrap().clone(),
+            queue,
+            command_pool,
+            upload_fence,
+        };
+
+        let scene_meshes = scene.meshes.clone();
+        let rt_scene_buffers = Some(scene.create_buffers(vk_ctx.clone()));
+        let rt_camera_buffer = Some(camera.into_uniform().create_buffer(vk_ctx.allocator.clone()));
+
         let render_surface = Some(RenderSurface::new(
-            VulkanContext {
-                allocator: allocator.as_ref().unwrap().clone(),
-                device: device.as_ref().unwrap().clone(),
-                queue,
-                command_pool,
-                upload_fence,
-            },
+            vk_ctx.clone(),
             PipelineContext { surface_format: format },
             swapchain.frames_in_flight() as u32,
         )?);
 
         let pure_ray_tracer = Some(PureRayTracer::new(
-            VulkanContext {
-                allocator: allocator.as_ref().unwrap().clone(),
-                device: device.as_ref().unwrap().clone(),
-                queue,
-                command_pool,
-                upload_fence,
-            },
-            PipelineContext { surface_format: format },
-            camera,
-            scene.clone(),
+            vk_ctx.clone(),
+            vk::Extent2D { width: camera.img_size[0], height: camera.img_size[1] },
+            rt_camera_buffer.as_ref().unwrap(),
+            rt_scene_buffers.as_ref().unwrap(),
         ));
 
         let deferred_ray_tracer = Some(DeferredRayTracer::new(
-            VulkanContext {
-                allocator: allocator.as_ref().unwrap().clone(),
-                device: device.as_ref().unwrap().clone(),
-                queue,
-                command_pool,
-                upload_fence,
-            },
+            vk_ctx,
             camera,
-            scene,
+            scene_meshes,
+            rt_camera_buffer.as_ref().unwrap(),
+            rt_scene_buffers.as_ref().unwrap(),
         )?);
 
         Ok(Self {
@@ -225,6 +226,8 @@ impl App {
             upload_fence,
             allocator,
             camera,
+            rt_camera_buffer,
+            rt_scene_buffers,
             render_surface,
             pure_ray_tracer,
             deferred_ray_tracer,
@@ -242,14 +245,13 @@ impl App {
 
         self.swapchain.update(extent);
         self.camera.img_size = [extent.width, extent.height];
+
+        self.rt_camera_buffer.as_mut().unwrap().set_data(&[self.camera.into_uniform()]);
         self.render_surface.as_mut().unwrap().update_image_size(vk_ctx.clone(), extent);
-        self.pure_ray_tracer.as_mut().unwrap().update_camera(self.camera);
+        self.pure_ray_tracer.as_mut().unwrap().set_output_extent(extent);
         self.deferred_ray_tracer.as_mut().unwrap().update_camera(vk_ctx.clone(), self.camera);
 
-        self.deferred_ray_tracer
-            .as_mut()
-            .unwrap()
-            .render(vk_ctx, self.render_surface.as_ref().unwrap().render_image.view);
+        self.pure_ray_tracer.as_mut().unwrap().render(vk_ctx, &self.render_surface.as_ref().unwrap().render_image);
     }
 
     pub fn render(&mut self) {
@@ -315,21 +317,21 @@ impl App {
             self.device.as_ref().unwrap().cmd_set_viewport(in_flight.command_buffer, 0, &[viewport]);
         }
 
-        let barrier_transfer_to_colour_attachment = vk::ImageMemoryBarrier2Builder::new()
-            .src_stage_mask(vk::PipelineStageFlags2::NONE)
-            .dst_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(vk::AccessFlags2::NONE)
-            .dst_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE)
-            .old_layout(vk::ImageLayout::UNDEFINED)
-            .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .image(swapchain_image)
-            .subresource_range(subresource_range);
         unsafe {
-            let dependency_info = vk::DependencyInfoBuilder::new()
-                .image_memory_barriers(std::slice::from_ref(&barrier_transfer_to_colour_attachment));
-            self.device.as_ref().unwrap().cmd_pipeline_barrier2(in_flight.command_buffer, &dependency_info);
+            self.device.as_ref().unwrap().cmd_pipeline_barrier2(
+                in_flight.command_buffer,
+                &vk::DependencyInfoBuilder::new().image_memory_barriers(&[vk::ImageMemoryBarrier2Builder::new()
+                    .src_stage_mask(vk::PipelineStageFlags2::NONE)
+                    .dst_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
+                    .src_access_mask(vk::AccessFlags2::NONE)
+                    .dst_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE)
+                    .old_layout(vk::ImageLayout::UNDEFINED)
+                    .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .image(swapchain_image)
+                    .subresource_range(subresource_range)]),
+            );
         }
 
         let colour_attachment = vk::RenderingAttachmentInfoBuilder::new()
@@ -358,21 +360,23 @@ impl App {
             self.device.as_ref().unwrap().cmd_end_rendering(in_flight.command_buffer);
         }
 
-        let barrier_transfer_to_present = vk::ImageMemoryBarrier2Builder::new()
-            .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT_KHR)
-            .dst_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT_KHR)
-            .src_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE_KHR)
-            .dst_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_READ_KHR | vk::AccessFlags2::COLOR_ATTACHMENT_WRITE_KHR)
-            .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .image(swapchain_image)
-            .subresource_range(subresource_range);
         unsafe {
-            let dependency_info = vk::DependencyInfoBuilder::new()
-                .image_memory_barriers(std::slice::from_ref(&barrier_transfer_to_present));
-            self.device.as_ref().unwrap().cmd_pipeline_barrier2(in_flight.command_buffer, &dependency_info);
+            self.device.as_ref().unwrap().cmd_pipeline_barrier2(
+                in_flight.command_buffer,
+                &vk::DependencyInfoBuilder::new().image_memory_barriers(&[vk::ImageMemoryBarrier2Builder::new()
+                    .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT_KHR)
+                    .dst_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT_KHR)
+                    .src_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE_KHR)
+                    .dst_access_mask(
+                        vk::AccessFlags2::COLOR_ATTACHMENT_READ_KHR | vk::AccessFlags2::COLOR_ATTACHMENT_WRITE_KHR,
+                    )
+                    .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                    .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .image(swapchain_image)
+                    .subresource_range(subresource_range)]),
+            );
             self.device
                 .as_ref()
                 .unwrap()
@@ -412,33 +416,40 @@ impl App {
 impl Drop for App {
     fn drop(&mut self) {
         unsafe {
-            self.device.as_ref().unwrap().device_wait_idle().expect("Cannot wait idle");
+            let device = self.device.as_ref().unwrap();
+            device.device_wait_idle().expect("Cannot wait idle");
 
             for &image_view in self.swapchain_image_views.iter() {
-                self.device.as_ref().unwrap().destroy_image_view(image_view, None);
+                device.destroy_image_view(image_view, None);
             }
 
             for frame in self.frames.iter() {
-                self.device.as_ref().unwrap().destroy_semaphore(frame.complete, None);
+                device.destroy_semaphore(frame.complete, None);
             }
 
-            self.device.as_ref().unwrap().destroy_fence(self.upload_fence, None);
+            device.destroy_fence(self.upload_fence, None);
 
             let prt_ref = self.pure_ray_tracer.as_ref().unwrap();
-            prt_ref.destroy(self.device.as_ref().unwrap());
+            prt_ref.destroy(device);
             self.pure_ray_tracer = None;
 
             let drt_ref = self.deferred_ray_tracer.as_ref().unwrap();
-            drt_ref.destroy(self.device.as_ref().unwrap());
+            drt_ref.destroy(device);
             self.deferred_ray_tracer = None;
 
             let rsf_ref = self.render_surface.as_ref().unwrap();
-            rsf_ref.destroy(self.device.as_ref().unwrap());
+            rsf_ref.destroy(device);
             self.render_surface = None;
 
-            self.device.as_ref().unwrap().destroy_command_pool(self.command_pool, None);
+            self.rt_scene_buffers.as_ref().unwrap().destroy(device);
+            self.rt_scene_buffers = None;
 
-            self.swapchain.destroy(self.device.as_ref().unwrap());
+            self.rt_camera_buffer.as_ref().unwrap().destroy();
+            self.rt_camera_buffer = None;
+
+            device.destroy_command_pool(self.command_pool, None);
+
+            self.swapchain.destroy(device);
 
             let mut alc_lock = self.allocator.as_ref().unwrap().write().unwrap();
             alc_lock.destroy();
@@ -447,9 +458,10 @@ impl Drop for App {
 
             self.instance.as_ref().unwrap().destroy_surface_khr(self.surface, None);
 
-            self.device.as_ref().unwrap().destroy_device(None);
+            device.destroy_device(None);
             self.device = None;
-
+        }
+        unsafe {
             if let Some(debug_messenger) = self.debug_messenger {
                 if !debug_messenger.is_null() {
                     self.instance.as_ref().unwrap().destroy_debug_utils_messenger_ext(debug_messenger, None);

@@ -21,6 +21,7 @@ use vk_mem_erupt as vma;
 
 use crate::shaders::{SURFACE_FRAGMENT_SHADER, SURFACE_VERTEX_SHADER};
 
+#[allow(unused)]
 #[derive(Copy, Clone, Debug)]
 struct Vertex {
     position:  glm::Vec2,
@@ -55,14 +56,30 @@ impl RenderSurface {
             AllocatedBuffer::with_data(vk_ctx.allocator.clone(), &buffer_info, vma::MemoryUsage::CpuToGpu, &vertices)
         };
 
-        let render_image = AllocatedImage::texture(
-            vk_ctx.clone(),
-            vk::Extent3D { width: 1, height: 1, depth: 1 },
-            vk::ImageViewType::_2D,
-            1,
-            1,
-            &[0u8, 0u8, 0u8, 0u8],
-        );
+        let render_image = {
+            let image_info = vk::ImageCreateInfoBuilder::new()
+                .usage(
+                    vk::ImageUsageFlags::COLOR_ATTACHMENT
+                        | vk::ImageUsageFlags::TRANSFER_DST
+                        | vk::ImageUsageFlags::SAMPLED,
+                )
+                .format(vk::Format::R8G8B8A8_UNORM)
+                .extent(vk::Extent3D { width: 1, height: 1, depth: 1 })
+                .mip_levels(1)
+                .array_layers(1)
+                .samples(vk::SampleCountFlagBits::_1)
+                .image_type(vk::ImageType::_2D);
+
+            let range = vk::ImageSubresourceRangeBuilder::new()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .base_array_layer(0)
+                .level_count(1)
+                .layer_count(1)
+                .build();
+
+            AllocatedImage::with_data(vk_ctx.clone(), image_info, vk::ImageViewType::_2D, range, &[0u8, 0u8, 0u8, 0u8])
+        };
 
         let graphics_pipeline = GraphicsPipeline::new(vk_ctx, GraphicsPipelineCreateInfo {
             vertex_shader:           SURFACE_VERTEX_SHADER,
@@ -98,17 +115,14 @@ impl RenderSurface {
                 front_face: vk::FrontFace::CLOCKWISE,
             },
             descriptor_sets_infos:   vec![DescriptorSetCreateInfo {
-                descriptor_infos: vec![DescriptorBindingCreateInfo {
-                    descriptor_type:    vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                    shader_stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                    buffer_info:        None,
-                    image_info:         Some(
-                        vk::DescriptorImageInfoBuilder::new()
-                            .image_view(render_image.view)
-                            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL),
-                    ),
-                    sampler_index:      Some(0),
-                }],
+                descriptor_infos: vec![DescriptorBindingCreateInfo::image(
+                    vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                    vk::ShaderStageFlags::FRAGMENT,
+                    vk::DescriptorImageInfoBuilder::new()
+                        .image_view(render_image.view)
+                        .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL),
+                    0,
+                )],
             }],
             sampler_infos:           vec![SamplerCreateInfo {
                 address_mode: vk::SamplerAddressMode::REPEAT,
@@ -137,14 +151,30 @@ impl RenderSurface {
 
     pub fn update_image_size(&mut self, vk_ctx: VulkanContext, extent: vk::Extent2D) {
         let texture_data = (0..4 * extent.width * extent.height).map(|_| 0u8).collect_vec();
-        let new_image = AllocatedImage::texture(
-            vk_ctx.clone(),
-            vk::Extent3D { width: extent.width, height: extent.height, depth: 1 },
-            vk::ImageViewType::_2D,
-            1,
-            1,
-            &texture_data,
-        );
+        let new_image = {
+            let image_info = vk::ImageCreateInfoBuilder::new()
+                .usage(
+                    vk::ImageUsageFlags::COLOR_ATTACHMENT
+                        | vk::ImageUsageFlags::TRANSFER_DST
+                        | vk::ImageUsageFlags::SAMPLED,
+                )
+                .format(vk::Format::R8G8B8A8_UNORM)
+                .extent(vk::Extent3D { width: extent.width, height: extent.height, depth: 1 })
+                .mip_levels(1)
+                .array_layers(1)
+                .samples(vk::SampleCountFlagBits::_1)
+                .image_type(vk::ImageType::_2D);
+
+            let range = vk::ImageSubresourceRangeBuilder::new()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .base_array_layer(0)
+                .level_count(1)
+                .layer_count(1)
+                .build();
+
+            AllocatedImage::with_data(vk_ctx.clone(), image_info, vk::ImageViewType::_2D, range, &texture_data)
+        };
         let to_delete = std::mem::replace(&mut self.render_image, new_image);
         self.images_to_delete.push(to_delete);
         self.frames_since_resize = 0;

@@ -78,7 +78,7 @@ pub struct GeometryPass {
 }
 
 impl GeometryPass {
-    pub fn new(vk_ctx: VulkanContext, camera: &Camera, scene_meshes: &[SceneMesh]) -> vma::Result<Self> {
+    pub fn new(vk_ctx: VulkanContext, camera: &Camera, scene_meshes: Vec<SceneMesh>) -> vma::Result<Self> {
         // Input buffers
         let vertex_buffer = {
             let vertices = scene_meshes
@@ -240,26 +240,18 @@ impl GeometryPass {
             },
             descriptor_sets_infos:   vec![
                 DescriptorSetCreateInfo {
-                    descriptor_infos: vec![DescriptorBindingCreateInfo {
-                        descriptor_type:    vk::DescriptorType::STORAGE_BUFFER,
-                        shader_stage_flags: vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-                        buffer_info:        Some(
-                            vk::DescriptorBufferInfoBuilder::new().buffer(mesh_metas.buffer).range(vk::WHOLE_SIZE),
-                        ),
-                        image_info:         None,
-                        sampler_index:      None,
-                    }],
+                    descriptor_infos: vec![DescriptorBindingCreateInfo::buffer(
+                        vk::DescriptorType::STORAGE_BUFFER,
+                        vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
+                        vk::DescriptorBufferInfoBuilder::new().buffer(mesh_metas.buffer).range(vk::WHOLE_SIZE),
+                    )],
                 },
                 DescriptorSetCreateInfo {
-                    descriptor_infos: vec![DescriptorBindingCreateInfo {
-                        descriptor_type:    vk::DescriptorType::UNIFORM_BUFFER,
-                        shader_stage_flags: vk::ShaderStageFlags::VERTEX,
-                        buffer_info:        Some(
-                            vk::DescriptorBufferInfoBuilder::new().buffer(camera_uniforms.buffer).range(vk::WHOLE_SIZE),
-                        ),
-                        image_info:         None,
-                        sampler_index:      None,
-                    }],
+                    descriptor_infos: vec![DescriptorBindingCreateInfo::buffer(
+                        vk::DescriptorType::UNIFORM_BUFFER,
+                        vk::ShaderStageFlags::VERTEX,
+                        vk::DescriptorBufferInfoBuilder::new().buffer(camera_uniforms.buffer).range(vk::WHOLE_SIZE),
+                    )],
                 },
             ],
             sampler_infos:           vec![],

@@ -95,10 +95,7 @@ impl AllocatedImage {
             .layer_count(array_layers)
             .build();
 
-        let this = Self::new(vk_ctx.clone(), image_info, view_type, range);
-        this.set_data(vk_ctx, texture_data);
-        this.allocator.read().unwrap().flush_allocation(&this.allocation, 0, texture_data.len());
-        this
+        Self::with_data(vk_ctx, image_info, view_type, range, texture_data)
     }
 
     pub fn color_attachment(
@@ -142,54 +139,49 @@ impl AllocatedImage {
         };
 
         command::immediate_submit(vk_ctx, |device, command_buffer| unsafe {
-            device.cmd_pipeline_barrier(
+            device.cmd_pipeline_barrier2(
                 command_buffer,
-                vk::PipelineStageFlags::TOP_OF_PIPE,
-                vk::PipelineStageFlags::TRANSFER,
-                vk::DependencyFlags::empty(),
-                &[],
-                &[],
-                &[vk::ImageMemoryBarrierBuilder::new()
+                &vk::DependencyInfoBuilder::new().image_memory_barriers(&[vk::ImageMemoryBarrier2Builder::new()
+                    .src_stage_mask(vk::PipelineStageFlags2::TOP_OF_PIPE)
+                    .dst_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+                    .src_access_mask(vk::AccessFlags2::empty())
+                    .dst_access_mask(vk::AccessFlags2::TRANSFER_WRITE)
                     .old_layout(vk::ImageLayout::UNDEFINED)
                     .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
-                    .src_access_mask(vk::AccessFlags::empty())
-                    .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
                     .image(self.image)
-                    .subresource_range(self.subresource_range)],
+                    .subresource_range(self.subresource_range)]),
             );
-            device.cmd_copy_buffer_to_image(
+            device.cmd_copy_buffer_to_image2(
                 command_buffer,
-                image_buffer.buffer,
-                self.image,
-                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                &[vk::BufferImageCopyBuilder::new()
-                    .buffer_offset(0)
-                    .buffer_row_length(0)
-                    .buffer_image_height(0)
-                    .image_subresource(
-                        vk::ImageSubresourceLayersBuilder::new()
-                            .aspect_mask(vk::ImageAspectFlags::COLOR)
-                            .mip_level(0)
-                            .base_array_layer(0)
-                            .layer_count(self.array_layers)
-                            .build(),
-                    )
-                    .image_extent(self.extent)],
+                &vk::CopyBufferToImageInfo2Builder::new()
+                    .src_buffer(image_buffer.buffer)
+                    .dst_image(self.image)
+                    .dst_image_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .regions(&[vk::BufferImageCopy2Builder::new()
+                        .buffer_offset(0)
+                        .buffer_row_length(0)
+                        .buffer_image_height(0)
+                        .image_subresource(
+                            vk::ImageSubresourceLayersBuilder::new()
+                                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                .mip_level(0)
+                                .base_array_layer(0)
+                                .layer_count(self.array_layers)
+                                .build(),
+                        )
+                        .image_extent(self.extent)]),
             );
-            device.cmd_pipeline_barrier(
+            device.cmd_pipeline_barrier2(
                 command_buffer,
-                vk::PipelineStageFlags::TRANSFER,
-                vk::PipelineStageFlags::FRAGMENT_SHADER,
-                vk::DependencyFlags::empty(),
-                &[],
-                &[],
-                &[vk::ImageMemoryBarrierBuilder::new()
+                &vk::DependencyInfoBuilder::new().image_memory_barriers(&[vk::ImageMemoryBarrier2Builder::new()
+                    .src_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+                    .dst_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                    .src_access_mask(vk::AccessFlags2::NONE)
+                    .dst_access_mask(vk::AccessFlags2::SHADER_SAMPLED_READ)
                     .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
                     .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
-                    .dst_access_mask(vk::AccessFlags::SHADER_READ)
                     .image(self.image)
-                    .subresource_range(self.subresource_range)],
+                    .subresource_range(self.subresource_range)]),
             );
         });
 
