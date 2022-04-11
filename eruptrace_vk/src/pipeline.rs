@@ -163,17 +163,7 @@ impl Pipeline {
                 .name(&entry_point),
         ];
 
-        let layout = {
-            let create_info = vk::PipelineLayoutCreateInfoBuilder::new()
-                .set_layouts(&descriptor_set_layouts)
-                .push_constant_ranges(&create_info.push_constant_ranges);
-            unsafe {
-                vk_ctx
-                    .device
-                    .create_pipeline_layout(&create_info, None)
-                    .expect("Cannot create graphics pipeline layout")
-            }
-        };
+        let layout = Self::create_pipeline_layout(&vk_ctx.device, &descriptor_set_layouts, &create_info.push_constant_ranges);
 
         let dynamic_pipeline_state = vk::PipelineDynamicStateCreateInfoBuilder::new()
             .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
