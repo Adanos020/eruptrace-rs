@@ -5,8 +5,8 @@ use eruptrace_vk::{
         ColorAttachmentInfo,
         DescriptorBindingCreateInfo,
         DescriptorSetCreateInfo,
-        GraphicsPipeline,
         GraphicsPipelineCreateInfo,
+        Pipeline,
         RasterisationStateInfo,
         SamplerCreateInfo,
     },
@@ -37,7 +37,7 @@ pub struct RenderSurface {
     vertex_buffer:    AllocatedBuffer<Vertex>,
     pub render_image: AllocatedImage,
 
-    graphics_pipeline: GraphicsPipeline,
+    graphics_pipeline: Pipeline,
 }
 
 impl RenderSurface {
@@ -81,7 +81,7 @@ impl RenderSurface {
             AllocatedImage::with_data(vk_ctx.clone(), image_info, vk::ImageViewType::_2D, range, &[0u8, 0u8, 0u8, 0u8])
         };
 
-        let graphics_pipeline = GraphicsPipeline::new(vk_ctx, GraphicsPipelineCreateInfo {
+        let graphics_pipeline = Pipeline::graphics(vk_ctx, GraphicsPipelineCreateInfo {
             vertex_shader:           SURFACE_VERTEX_SHADER,
             fragment_shader:         SURFACE_FRAGMENT_SHADER,
             color_attachment_infos:  vec![ColorAttachmentInfo {

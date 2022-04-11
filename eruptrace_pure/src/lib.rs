@@ -12,8 +12,8 @@ use eruptrace_vk::{
         ColorAttachmentInfo,
         DescriptorBindingCreateInfo,
         DescriptorSetCreateInfo,
-        GraphicsPipeline,
         GraphicsPipelineCreateInfo,
+        Pipeline,
         RasterisationStateInfo,
         SamplerCreateInfo,
     },
@@ -45,12 +45,14 @@ pub struct PureRayTracer {
     vertex_buffer:     AllocatedBuffer<Vertex>,
     output_extent:     vk::Extent2D,
     push_constants:    PushConstants,
-    graphics_pipeline: GraphicsPipeline,
+    graphics_pipeline: Pipeline,
 }
 
 impl PureRayTracer {
     pub fn new(
-        vk_ctx: VulkanContext, output_extent: vk::Extent2D, camera_buffer: &AllocatedBuffer<CameraUniform>,
+        vk_ctx: VulkanContext,
+        output_extent: vk::Extent2D,
+        camera_buffer: &AllocatedBuffer<CameraUniform>,
         scene_buffers: &SceneBuffers,
     ) -> Self {
         let vertex_buffer = {
@@ -67,7 +69,7 @@ impl PureRayTracer {
             AllocatedBuffer::with_data(vk_ctx.allocator.clone(), &buffer_info, vma::MemoryUsage::CpuToGpu, &vertices)
         };
 
-        let graphics_pipeline = GraphicsPipeline::new(vk_ctx, GraphicsPipelineCreateInfo {
+        let graphics_pipeline = Pipeline::graphics(vk_ctx, GraphicsPipelineCreateInfo {
             vertex_shader:           VERTEX_SHADER,
             fragment_shader:         FRAGMENT_SHADER,
             color_attachment_infos:  vec![ColorAttachmentInfo {
@@ -171,12 +173,7 @@ impl PureRayTracer {
 
     pub fn render(&self, vk_ctx: VulkanContext, target: &AllocatedImage) {
         command::immediate_submit(vk_ctx, |device, command_buffer| unsafe {
-            device.cmd_set_scissor(command_buffer, 0, &[vk::Rect2DBuilder::new().extent(self.output_extent)]);
-            device.cmd_set_viewport(command_buffer, 0, &[vk::ViewportBuilder::new()
-                .width(self.output_extent.width as _)
-                .height(self.output_extent.height as _)
-                .min_depth(0.0)
-                .max_depth(1.0)]);
+            command::set_scissor_and_viewport(device, command_buffer, self.output_extent);
 
             device.cmd_pipeline_barrier2(
                 command_buffer,

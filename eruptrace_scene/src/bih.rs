@@ -121,7 +121,10 @@ fn calculate_bounds(triangles: &[Triangle]) -> BoundingBox {
 }
 
 fn make_hierarchy(
-    triangles_part: &mut [Triangle], all_triangles_addr: usize, bounds: BoundingBox, current: usize,
+    triangles_part: &mut [Triangle],
+    all_triangles_addr: usize,
+    bounds: BoundingBox,
+    current: usize,
     out_nodes: &mut Vec<BihNode>,
 ) {
     if !triangles_part.is_empty() {

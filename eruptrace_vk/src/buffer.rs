@@ -16,7 +16,9 @@ pub struct AllocatedBuffer<T: Sized> {
 
 impl<T: Sized> AllocatedBuffer<T> {
     pub fn new(
-        allocator: Arc<RwLock<vma::Allocator>>, buffer_info: &vk::BufferCreateInfoBuilder, usage: vma::MemoryUsage,
+        allocator: Arc<RwLock<vma::Allocator>>,
+        buffer_info: &vk::BufferCreateInfoBuilder,
+        usage: vma::MemoryUsage,
     ) -> Self {
         let allocation_info = vma::AllocationCreateInfo {
             usage,
@@ -30,7 +32,9 @@ impl<T: Sized> AllocatedBuffer<T> {
     }
 
     pub fn with_data(
-        allocator: Arc<RwLock<vma::Allocator>>, buffer_info: &vk::BufferCreateInfoBuilder, usage: vma::MemoryUsage,
+        allocator: Arc<RwLock<vma::Allocator>>,
+        buffer_info: &vk::BufferCreateInfoBuilder,
+        usage: vma::MemoryUsage,
         data: &[T],
     ) -> Self {
         let data_size = std::mem::size_of::<T>() * data.len();

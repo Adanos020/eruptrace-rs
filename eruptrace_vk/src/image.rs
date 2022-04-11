@@ -21,7 +21,10 @@ pub struct AllocatedImage {
 
 impl AllocatedImage {
     pub fn new(
-        vk_ctx: VulkanContext, image_info: vk::ImageCreateInfoBuilder, view_type: vk::ImageViewType,
+        vk_ctx: VulkanContext,
+        image_info: vk::ImageCreateInfoBuilder,
+        layout: Option<vk::ImageLayout>,
+        view_type: vk::ImageViewType,
         subresource_range: vk::ImageSubresourceRange,
     ) -> Self {
         let allocation_info = vma::AllocationCreateInfo {
@@ -51,6 +54,19 @@ impl AllocatedImage {
 
         let view = unsafe { vk_ctx.device.create_image_view(&view_info, None).expect("Cannot create image view") };
 
+        if let Some(layout) = layout {
+            command::immediate_submit(vk_ctx.clone(), |device, command_buffer| unsafe {
+                device.cmd_pipeline_barrier2(
+                    command_buffer,
+                    &vk::DependencyInfoBuilder::new().image_memory_barriers(&[vk::ImageMemoryBarrier2Builder::new()
+                        .old_layout(vk::ImageLayout::UNDEFINED)
+                        .new_layout(layout)
+                        .image(image)
+                        .subresource_range(subresource_range)]),
+                );
+            });
+        }
+
         Self {
             image,
             view,
@@ -65,22 +81,29 @@ impl AllocatedImage {
     }
 
     pub fn with_data<T: Sized>(
-        vk_ctx: VulkanContext, image_info: vk::ImageCreateInfoBuilder, view_type: vk::ImageViewType,
-        range: vk::ImageSubresourceRange, data: &[T],
+        vk_ctx: VulkanContext,
+        image_info: vk::ImageCreateInfoBuilder,
+        view_type: vk::ImageViewType,
+        range: vk::ImageSubresourceRange,
+        data: &[T],
     ) -> Self {
-        let this = Self::new(vk_ctx.clone(), image_info, view_type, range);
+        let this = Self::new(vk_ctx.clone(), image_info, None, view_type, range);
         this.set_data(vk_ctx.clone(), data);
         vk_ctx.allocator.read().unwrap().flush_allocation(&this.allocation, 0, std::mem::size_of::<T>() * data.len());
         this
     }
 
     pub fn texture(
-        vk_ctx: VulkanContext, extent: vk::Extent3D, view_type: vk::ImageViewType, mip_levels: u32, array_layers: u32,
-        texture_data: &[u8],
+        vk_ctx: VulkanContext,
+        format: vk::Format,
+        extent: vk::Extent3D,
+        view_type: vk::ImageViewType,
+        mip_levels: u32,
+        array_layers: u32,
     ) -> Self {
         let image_info = vk::ImageCreateInfoBuilder::new()
             .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
-            .format(vk::Format::R8G8B8A8_UNORM)
+            .format(format)
             .extent(extent)
             .mip_levels(mip_levels)
             .array_layers(array_layers)
@@ -95,18 +118,36 @@ impl AllocatedImage {
             .layer_count(array_layers)
             .build();
 
-        Self::with_data(vk_ctx, image_info, view_type, range, texture_data)
+        Self::new(vk_ctx, image_info, Some(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL), view_type, range)
+    }
+
+    pub fn texture_with_data(
+        vk_ctx: VulkanContext,
+        extent: vk::Extent3D,
+        view_type: vk::ImageViewType,
+        mip_levels: u32,
+        array_layers: u32,
+        texture_data: &[u8],
+    ) -> Self {
+        let this =
+            Self::texture(vk_ctx.clone(), vk::Format::R8G8B8A8_UNORM, extent, view_type, mip_levels, array_layers);
+        this.set_data(vk_ctx.clone(), texture_data);
+        vk_ctx.allocator.read().unwrap().flush_allocation(&this.allocation, 0, texture_data.len());
+        this
     }
 
     pub fn color_attachment(
-        vk_ctx: VulkanContext, format: vk::Format, extent: vk::Extent3D, view_type: vk::ImageViewType, mip_levels: u32,
+        vk_ctx: VulkanContext,
+        format: vk::Format,
+        extent: vk::Extent3D,
+        view_type: vk::ImageViewType,
+        mip_levels: u32,
         array_layers: u32,
     ) -> Self {
         let image_info = vk::ImageCreateInfoBuilder::new()
             .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
             .format(format)
             .extent(extent)
-            .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .array_layers(array_layers)
             .mip_levels(mip_levels)
             .samples(vk::SampleCountFlagBits::_1)
@@ -120,7 +161,39 @@ impl AllocatedImage {
             .layer_count(array_layers)
             .build();
 
-        Self::new(vk_ctx, image_info, view_type, range)
+        Self::new(vk_ctx, image_info, Some(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL), view_type, range)
+    }
+
+    pub fn gbuffer(
+        vk_ctx: VulkanContext,
+        format: vk::Format,
+        extent: vk::Extent3D,
+        view_type: vk::ImageViewType,
+        mip_levels: u32,
+        array_layers: u32,
+    ) -> Self {
+        let image_info = vk::ImageCreateInfoBuilder::new()
+            .usage(
+                vk::ImageUsageFlags::COLOR_ATTACHMENT
+                    | vk::ImageUsageFlags::TRANSFER_DST
+                    | vk::ImageUsageFlags::SAMPLED,
+            )
+            .format(format)
+            .extent(extent)
+            .array_layers(array_layers)
+            .mip_levels(mip_levels)
+            .samples(vk::SampleCountFlagBits::_1)
+            .image_type(vk::ImageType::_2D);
+
+        let range = vk::ImageSubresourceRangeBuilder::new()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .base_mip_level(0)
+            .level_count(mip_levels)
+            .base_array_layer(0)
+            .layer_count(array_layers)
+            .build();
+
+        Self::new(vk_ctx, image_info, Some(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL), view_type, range)
     }
 
     pub fn destroy(&self, device: &DeviceLoader) {

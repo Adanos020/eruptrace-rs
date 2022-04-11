@@ -46,7 +46,9 @@ impl From<&str> for MaterialType {
 
 impl Material {
     pub fn from_json(
-        object: &json::Value, texture_names: &[String], normal_map_names: &[String],
+        object: &json::Value,
+        texture_names: &[String],
+        normal_map_names: &[String],
     ) -> anyhow::Result<Self> {
         let material_type = MaterialType::from(object["type"].as_str().unwrap_or_default());
 

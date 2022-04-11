@@ -74,9 +74,13 @@ struct Scattering {
 
 layout(location = 0) out vec4 fragColour;
 
-layout(set = 0, binding = 0) uniform sampler2DArray textures;
-layout(set = 0, binding = 1) uniform sampler2DArray normalMaps;
-layout(set = 0, binding = 2) uniform CameraUniform {
+layout(set = 0, binding = 0) uniform sampler2D inPositions;
+layout(set = 0, binding = 1) uniform sampler2D inNormals;
+layout(set = 0, binding = 2) uniform sampler2D inMaterials;
+
+layout(set = 1, binding = 0) uniform sampler2DArray textures;
+layout(set = 1, binding = 1) uniform sampler2DArray normalMaps;
+layout(set = 1, binding = 2) uniform CameraUniform {
     vec4 position;
     vec4 horizontal;
     vec4 vertical;
@@ -86,13 +90,13 @@ layout(set = 0, binding = 2) uniform CameraUniform {
     uint samples;
     uint maxReflections;
 } camera;
-layout(set = 0, binding = 3, std140) readonly buffer BIH {
+layout(set = 1, binding = 3, std140) readonly buffer BIH {
     BihNode bihNodes[];
 };
-layout(set = 0, binding = 4, std140) readonly buffer MaterialData {
+layout(set = 1, binding = 4, std140) readonly buffer MaterialData {
     Material materials[];
 };
-layout(set = 0, binding = 5, std140) readonly buffer TriangleData {
+layout(set = 1, binding = 5, std140) readonly buffer TriangleData {
     Triangle triangles[];
 };
 
@@ -175,16 +179,28 @@ bool scatterEmitting(in Hit hit, in Material mat, out Scattering scattering);
 void main() {
     Ray ray;
     ray.origin = camera.position.xyz;
-    vec4 pixelColor = vec4(0.f);
-    for (int i = 0; i < camera.samples; ++i) {
-        float u = (gl_FragCoord.x + rand(i)) * camera.imgSizeInv.x;
-        float v = (camera.imgSize.y - gl_FragCoord.y + rand(i + 0.5f)) * camera.imgSizeInv.y;
+    {
+        float u = (gl_FragCoord.x) * camera.imgSizeInv.x;
+        float v = (camera.imgSize.y - gl_FragCoord.y) * camera.imgSizeInv.y;
         vec4 samplePosition = camera.bottomLeft + (u * camera.horizontal) + (v * camera.vertical);
         ray.direction = (samplePosition - camera.position).xyz;
-        ray.invDirection = 1.f / ray.direction;
-        pixelColor += trace(ray);
     }
-    fragColour = sqrt(pixelColor / float(camera.samples));
+
+    vec2 uv = gl_FragCoord.xy * camera.imgSizeInv;
+    vec4 position = texture(inPositions, uv);
+    bool hitOccured = position.w == 1.f;
+    if (hitOccured) {
+        // Geometry
+        vec3 normal = texture(inNormals, uv).xyz;
+        vec4 material = texture(inMaterials, uv);
+        vec2 texCoord = material.xy;
+        uint materialIndex = uint(material.z);
+        fragColour = vec4(position.xyz, 1.f);
+    } else {
+        // Sky
+        vec3 rayDir = normalize(ray.direction);
+        fragColour = sampleTexture(mappingOnUnitSphere(rayDir), 0);
+    }
 }
 
 vec4 trace(Ray ray) {
@@ -245,8 +261,8 @@ bool hitShapeBih(in Ray ray, out Hit hit) {
             bool hit2Occurred = dist2 <= currEntry.maxDistance;
 
             uint children[2] = uint[](
-                bihNodes[currEntry.nodeIndex].childLeft,
-                bihNodes[currEntry.nodeIndex].childRight
+            bihNodes[currEntry.nodeIndex].childLeft,
+            bihNodes[currEntry.nodeIndex].childRight
             );
 
             if (hit1Occurred) {

@@ -8,8 +8,8 @@ use eruptrace_vk::{
         ColorAttachmentInfo,
         DescriptorBindingCreateInfo,
         DescriptorSetCreateInfo,
-        GraphicsPipeline,
         GraphicsPipelineCreateInfo,
+        Pipeline,
         RasterisationStateInfo,
     },
     AllocatedBuffer,
@@ -21,7 +21,10 @@ use nalgebra_glm as glm;
 use std140::repr_std140;
 use vk_mem_erupt as vma;
 
-use crate::shaders::{MESH_FRAGMENT_SHADER, MESH_VERTEX_SHADER};
+use crate::{
+    gbuffers::GBuffers,
+    shaders::{MESH_FRAGMENT_SHADER, MESH_VERTEX_SHADER},
+};
 
 #[repr_std140]
 #[derive(Copy, Clone, Debug)]
@@ -69,12 +72,10 @@ pub struct GeometryPass {
     mesh_metas:      AllocatedBuffer<MeshMetas>,
     camera_uniforms: AllocatedBuffer<CameraUniforms>,
 
-    output_extent:     vk::Extent2D,
-    pub out_positions: AllocatedImage,
-    pub out_normals:   AllocatedImage,
-    pub out_texcoords: AllocatedImage,
+    output_extent: vk::Extent2D,
+    pub gbuffers:  GBuffers,
 
-    graphics_pipeline: GraphicsPipeline,
+    graphics_pipeline: Pipeline,
 }
 
 impl GeometryPass {
@@ -168,7 +169,7 @@ impl GeometryPass {
 
         // Output images
         let make_gbuffer = |format| {
-            AllocatedImage::color_attachment(
+            AllocatedImage::gbuffer(
                 vk_ctx.clone(),
                 format,
                 vk::Extent3D { width: 1, height: 1, depth: 1 },
@@ -180,10 +181,10 @@ impl GeometryPass {
 
         let out_positions = make_gbuffer(vk::Format::R32G32B32A32_SFLOAT);
         let out_normals = make_gbuffer(vk::Format::R32G32B32A32_SFLOAT);
-        let out_texcoords = make_gbuffer(vk::Format::R32G32B32A32_SFLOAT);
+        let out_materials = make_gbuffer(vk::Format::R32G32B32A32_SFLOAT);
 
         // Graphics pipeline
-        let graphics_pipeline = GraphicsPipeline::new(vk_ctx.clone(), GraphicsPipelineCreateInfo {
+        let graphics_pipeline = Pipeline::graphics(vk_ctx.clone(), GraphicsPipelineCreateInfo {
             vertex_shader:           MESH_VERTEX_SHADER,
             fragment_shader:         MESH_FRAGMENT_SHADER,
             color_attachment_infos:  vec![
@@ -264,9 +265,7 @@ impl GeometryPass {
             mesh_metas,
             camera_uniforms,
             output_extent: vk::Extent2D { width: camera.img_size[0], height: camera.img_size[1] },
-            out_positions,
-            out_normals,
-            out_texcoords,
+            gbuffers: GBuffers { out_positions, out_normals, out_materials },
             graphics_pipeline,
         })
     }
@@ -276,9 +275,7 @@ impl GeometryPass {
         self.index_buffer.destroy();
         self.camera_uniforms.destroy();
         self.mesh_metas.destroy();
-        self.out_positions.destroy(device);
-        self.out_normals.destroy(device);
-        self.out_texcoords.destroy(device);
+        self.gbuffers.destroy(device);
         self.graphics_pipeline.destroy(device);
     }
 
@@ -298,7 +295,7 @@ impl GeometryPass {
         self.camera_uniforms.set_data(&[data]);
 
         let make_color_attachment = |format| {
-            AllocatedImage::color_attachment(
+            AllocatedImage::gbuffer(
                 vk_ctx.clone(),
                 format,
                 vk::Extent3D { width: camera.img_size[0], height: camera.img_size[1], depth: 1 },
@@ -308,44 +305,53 @@ impl GeometryPass {
             )
         };
 
-        self.out_positions.destroy(&vk_ctx.device);
-        self.out_normals.destroy(&vk_ctx.device);
-        self.out_texcoords.destroy(&vk_ctx.device);
+        self.gbuffers.out_positions.destroy(&vk_ctx.device);
+        self.gbuffers.out_normals.destroy(&vk_ctx.device);
+        self.gbuffers.out_materials.destroy(&vk_ctx.device);
 
-        self.out_positions = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
-        self.out_normals = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
-        self.out_texcoords = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
+        self.gbuffers.out_positions = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
+        self.gbuffers.out_normals = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
+        self.gbuffers.out_materials = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
 
         self.output_extent = vk::Extent2D { width: camera.img_size[0], height: camera.img_size[1] };
     }
 
     pub fn render(&self, vk_ctx: VulkanContext) {
-        let make_attachment_info = |view| {
-            vk::RenderingAttachmentInfoBuilder::new()
-                .image_view(view)
-                .image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                .clear_value(vk::ClearValue { color: vk::ClearColorValue { float32: [0.0, 0.0, 0.0, 0.0] } })
-                .load_op(vk::AttachmentLoadOp::CLEAR)
-                .store_op(vk::AttachmentStoreOp::STORE)
-                .resolve_image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-        };
-        let colour_attachments = vec![
-            make_attachment_info(self.out_positions.view),
-            make_attachment_info(self.out_normals.view),
-            make_attachment_info(self.out_texcoords.view),
-        ];
+        let colour_attachments = self.gbuffers.create_colour_attachment_infos();
         let rendering_info = vk::RenderingInfoBuilder::new()
             .color_attachments(&colour_attachments)
             .layer_count(1)
             .render_area(vk::Rect2D { offset: Default::default(), extent: self.output_extent });
 
         command::immediate_submit(vk_ctx, |device, command_buffer| unsafe {
-            device.cmd_set_scissor(command_buffer, 0, &[vk::Rect2DBuilder::new().extent(self.output_extent)]);
-            device.cmd_set_viewport(command_buffer, 0, &[vk::ViewportBuilder::new()
-                .width(self.output_extent.width as _)
-                .height(self.output_extent.height as _)
-                .min_depth(0.0)
-                .max_depth(1.0)]);
+            command::set_scissor_and_viewport(device, command_buffer, self.output_extent);
+
+            device.cmd_pipeline_barrier2(
+                command_buffer,
+                &vk::DependencyInfoBuilder::new().image_memory_barriers({
+                    let barrier = vk::ImageMemoryBarrier2Builder::new()
+                        .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                        .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                        .src_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                        .dst_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
+                        .src_access_mask(vk::AccessFlags2::SHADER_SAMPLED_READ)
+                        .dst_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE)
+                        .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                        .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+                    &[
+                        barrier
+                            .image(self.gbuffers.out_positions.image)
+                            .subresource_range(self.gbuffers.out_positions.subresource_range),
+                        barrier
+                            .image(self.gbuffers.out_normals.image)
+                            .subresource_range(self.gbuffers.out_normals.subresource_range),
+                        barrier
+                            .image(self.gbuffers.out_materials.image)
+                            .subresource_range(self.gbuffers.out_materials.subresource_range),
+                    ]
+                }),
+            );
+
             device.cmd_begin_rendering(command_buffer, &rendering_info);
             device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, self.graphics_pipeline.pipeline);
             device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.vertex_buffer.buffer], &[0]);
@@ -371,6 +377,32 @@ impl GeometryPass {
                 device.cmd_draw_indexed(command_buffer, mesh.index_count, 1, mesh.first_index, mesh.vertex_offset, 0);
             }
             device.cmd_end_rendering(command_buffer);
+
+            device.cmd_pipeline_barrier2(
+                command_buffer,
+                &vk::DependencyInfoBuilder::new().image_memory_barriers({
+                    let barrier = vk::ImageMemoryBarrier2Builder::new()
+                        .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                        .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                        .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
+                        .dst_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                        .src_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE)
+                        .dst_access_mask(vk::AccessFlags2::SHADER_SAMPLED_READ)
+                        .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                        .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL);
+                    &[
+                        barrier
+                            .image(self.gbuffers.out_positions.image)
+                            .subresource_range(self.gbuffers.out_positions.subresource_range),
+                        barrier
+                            .image(self.gbuffers.out_normals.image)
+                            .subresource_range(self.gbuffers.out_normals.subresource_range),
+                        barrier
+                            .image(self.gbuffers.out_materials.image)
+                            .subresource_range(self.gbuffers.out_materials.subresource_range),
+                    ]
+                }),
+            );
         });
     }
 }

@@ -9,6 +9,7 @@ use eruptrace_deferred::DeferredRayTracer;
 use eruptrace_pure::PureRayTracer;
 use eruptrace_scene::{camera::Camera, CameraUniform, Scene, SceneBuffers};
 use eruptrace_vk::{
+    command,
     contexts::{FrameContext, PipelineContext, RenderContext, VulkanContext},
     debug::debug_callback,
     AllocatedBuffer,
@@ -249,9 +250,9 @@ impl App {
         self.rt_camera_buffer.as_mut().unwrap().set_data(&[self.camera.into_uniform()]);
         self.render_surface.as_mut().unwrap().update_image_size(vk_ctx.clone(), extent);
         self.pure_ray_tracer.as_mut().unwrap().set_output_extent(extent);
-        self.deferred_ray_tracer.as_mut().unwrap().update_camera(vk_ctx.clone(), self.camera);
+        self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx.clone(), self.camera);
 
-        self.pure_ray_tracer.as_mut().unwrap().render(vk_ctx, &self.render_surface.as_ref().unwrap().render_image);
+        self.deferred_ray_tracer.as_mut().unwrap().render(vk_ctx, &self.render_surface.as_ref().unwrap().render_image);
     }
 
     pub fn render(&mut self) {
@@ -297,7 +298,6 @@ impl App {
         let swapchain_image_view = self.swapchain_image_views[acquired_frame.image_index];
 
         let extent = self.swapchain.extent();
-        let scissor = vk::Rect2DBuilder::new().extent(extent);
 
         unsafe {
             let begin_info =
@@ -307,14 +307,7 @@ impl App {
                 .unwrap()
                 .begin_command_buffer(in_flight.command_buffer, &begin_info)
                 .expect("Cannot begin command buffer");
-            self.device.as_ref().unwrap().cmd_set_scissor(in_flight.command_buffer, 0, &[scissor]);
-
-            let viewport = vk::ViewportBuilder::new()
-                .width(extent.width as _)
-                .height(extent.height as _)
-                .min_depth(0.0)
-                .max_depth(1.0);
-            self.device.as_ref().unwrap().cmd_set_viewport(in_flight.command_buffer, 0, &[viewport]);
+            command::set_scissor_and_viewport(self.device.as_ref().unwrap(), in_flight.command_buffer, extent);
         }
 
         unsafe {

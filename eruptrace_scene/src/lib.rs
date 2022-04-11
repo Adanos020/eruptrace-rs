@@ -171,7 +171,7 @@ impl Scene {
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         SceneBuffers {
-            textures_image: AllocatedImage::texture(
+            textures_image: AllocatedImage::texture_with_data(
                 vk_ctx.clone(),
                 image_extent,
                 vk::ImageViewType::_2D_ARRAY,
@@ -179,7 +179,7 @@ impl Scene {
                 n_textures as u32,
                 &textures,
             ),
-            normal_maps_image: AllocatedImage::texture(
+            normal_maps_image: AllocatedImage::texture_with_data(
                 vk_ctx.clone(),
                 image_extent,
                 vk::ImageViewType::_2D_ARRAY,

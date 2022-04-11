@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 pub mod buffer;
 pub mod command;
 pub mod contexts;

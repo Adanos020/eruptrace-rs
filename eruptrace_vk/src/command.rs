@@ -31,3 +31,12 @@ where
             .expect("Cannot reset command pool");
     }
 }
+
+pub unsafe fn set_scissor_and_viewport(device: &DeviceLoader, command_buffer: vk::CommandBuffer, extent: vk::Extent2D) {
+    device.cmd_set_scissor(command_buffer, 0, &[vk::Rect2DBuilder::new().extent(extent)]);
+    device.cmd_set_viewport(command_buffer, 0, &[vk::ViewportBuilder::new()
+        .width(extent.width as _)
+        .height(extent.height as _)
+        .min_depth(0.0)
+        .max_depth(1.0)]);
+}

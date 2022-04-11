@@ -23,5 +23,5 @@ layout(push_constant, std140) readonly uniform Constants {
 void main() {
     outPosition = vec4(fPosition, 1.f);
     outNormal   = vec4(normalize(fNormal), 1.f);
-    outTexCoord = vec4(fTexCoord, meshMetas[meshMetaIndex].materialIndex, 0.f);
+    outTexCoord = vec4(fTexCoord, meshMetas[meshMetaIndex].materialIndex, 1.f);
 }

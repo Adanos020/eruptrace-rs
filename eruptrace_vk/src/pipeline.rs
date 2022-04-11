@@ -6,13 +6,21 @@ use itertools::Itertools;
 use crate::{shader::make_shader_module, VulkanContext};
 
 #[derive(Clone, Debug)]
-pub struct GraphicsPipeline {
+pub struct Pipeline {
     pub samplers:               Vec<vk::Sampler>,
     pub descriptor_set_layouts: Vec<vk::DescriptorSetLayout>,
     pub descriptor_pool:        vk::DescriptorPool,
     pub descriptor_sets:        SmallVec<vk::DescriptorSet>,
     pub layout:                 vk::PipelineLayout,
     pub pipeline:               vk::Pipeline,
+}
+
+#[derive(Clone, Debug)]
+pub struct ComputePipelineCreateInfo<'a> {
+    pub compute_shader:        &'static [u8],
+    pub push_constant_ranges:  Vec<vk::PushConstantRangeBuilder<'a>>,
+    pub descriptor_sets_infos: Vec<DescriptorSetCreateInfo<'a>>,
+    pub sampler_infos:         Vec<SamplerCreateInfo>,
 }
 
 #[derive(Clone, Debug)]
@@ -61,60 +69,18 @@ pub struct SamplerCreateInfo {
     pub filter:       vk::Filter,
 }
 
-impl GraphicsPipeline {
-    pub fn new(vk_ctx: VulkanContext, create_info: GraphicsPipelineCreateInfo) -> GraphicsPipeline {
-        let samplers = create_info
-            .sampler_infos
-            .into_iter()
-            .map(|info| {
-                let create_info = vk::SamplerCreateInfoBuilder::new()
-                    .address_mode_u(info.address_mode)
-                    .address_mode_v(info.address_mode)
-                    .address_mode_w(info.address_mode)
-                    .min_filter(info.filter)
-                    .mag_filter(info.filter);
-                unsafe { vk_ctx.device.create_sampler(&create_info, None).expect("Cannot create sampler") }
-            })
-            .collect_vec();
+impl Pipeline {
+    pub fn compute(vk_ctx: VulkanContext, create_info: ComputePipelineCreateInfo) -> Self {
+        let samplers =
+            create_info.sampler_infos.into_iter().map(|info| info.create_sampler(&vk_ctx.device)).collect_vec();
 
         let descriptor_set_layouts = create_info
             .descriptor_sets_infos
             .iter()
-            .map(|set_info| {
-                let infos = set_info
-                    .descriptor_infos
-                    .iter()
-                    .enumerate()
-                    .map(|(binding, bind_info)| {
-                        vk::DescriptorSetLayoutBindingBuilder::new()
-                            .binding(binding as u32)
-                            .descriptor_count(1)
-                            .descriptor_type(bind_info.descriptor_type)
-                            .stage_flags(bind_info.shader_stage_flags)
-                    })
-                    .collect_vec();
-                let create_info = vk::DescriptorSetLayoutCreateInfoBuilder::new().bindings(&infos);
-                unsafe {
-                    vk_ctx
-                        .device
-                        .create_descriptor_set_layout(&create_info, None)
-                        .expect("Cannot create descriptor set layout")
-                }
-            })
+            .map(|set_info| set_info.create_layout(&vk_ctx.device))
             .collect_vec();
 
-        let descriptor_pool = {
-            let sizes = create_info
-                .descriptor_sets_infos
-                .iter()
-                .flat_map(|set_info| set_info.descriptor_infos.iter())
-                .map(|bind_info| bind_info.descriptor_type)
-                .dedup()
-                .map(|descriptor_type| vk::DescriptorPoolSizeBuilder::new()._type(descriptor_type).descriptor_count(10))
-                .collect_vec();
-            let create_info = vk::DescriptorPoolCreateInfoBuilder::new().max_sets(10).pool_sizes(&sizes);
-            unsafe { vk_ctx.device.create_descriptor_pool(&create_info, None).expect("Cannot create descriptor pool") }
-        };
+        let descriptor_pool = Self::create_descriptor_pool(&vk_ctx.device, &create_info.descriptor_sets_infos);
 
         let descriptor_sets = unsafe {
             vk_ctx
@@ -127,77 +93,60 @@ impl GraphicsPipeline {
                 .expect("Cannot allocate descriptor sets")
         };
 
-        let mut descriptor_writes_data = Vec::new();
-        for (set, set_info) in create_info.descriptor_sets_infos.iter().enumerate() {
-            let mut curr_is_image = set_info.descriptor_infos[0].image_info.is_some();
-            let mut curr_type = set_info.descriptor_infos[0].descriptor_type;
-            let mut buffer_infos = Vec::new();
-            let mut image_infos = Vec::new();
-            let mut first_binding = 0u32;
-            for (i, binding_info) in set_info.descriptor_infos.iter().enumerate() {
-                assert_ne!(binding_info.buffer_info.is_some(), binding_info.image_info.is_some());
-                assert_eq!(binding_info.image_info.is_some(), binding_info.sampler_index.is_some());
+        Self::update_descriptor_sets(&vk_ctx.device, &create_info.descriptor_sets_infos, &descriptor_sets, &samplers);
 
-                if curr_type != binding_info.descriptor_type || curr_is_image != binding_info.image_info.is_some() {
-                    descriptor_writes_data.push((
-                        set,
-                        first_binding,
-                        curr_type,
-                        curr_is_image,
-                        buffer_infos,
-                        image_infos,
-                    ));
-                    curr_type = binding_info.descriptor_type;
-                    curr_is_image = binding_info.image_info.is_some();
-                    buffer_infos = Vec::new();
-                    image_infos = Vec::new();
-                    first_binding = i as u32;
-                }
+        let compute_shader = make_shader_module(&vk_ctx.device, create_info.compute_shader);
 
-                if binding_info.buffer_info.is_some() {
-                    buffer_infos.push(binding_info.buffer_info.unwrap().into_builder());
-                } else {
-                    image_infos.push(
-                        binding_info
-                            .image_info
-                            .unwrap()
-                            .sampler(samplers[binding_info.sampler_index.unwrap()])
-                            .into_builder(),
-                    );
-                }
+        let entry_point = CString::new("main").unwrap();
+        let shader_stage = vk::PipelineShaderStageCreateInfoBuilder::new()
+            .stage(vk::ShaderStageFlagBits::COMPUTE)
+            .module(compute_shader)
+            .name(&entry_point);
 
-                if i == set_info.descriptor_infos.len() - 1 {
-                    descriptor_writes_data.push((
-                        set,
-                        first_binding,
-                        curr_type,
-                        curr_is_image,
-                        buffer_infos,
-                        image_infos,
-                    ));
-                    break; // This is just an easy way to dismiss the "use of moved value" error.
-                }
-            }
-        }
+        let layout =
+            Self::create_pipeline_layout(&vk_ctx.device, &descriptor_set_layouts, &create_info.push_constant_ranges);
 
-        let descriptor_writes = descriptor_writes_data
-            .iter()
-            .map(|(set, first_binding, descriptor_type, is_image, buffer_infos, image_infos)| {
-                let write = vk::WriteDescriptorSetBuilder::new()
-                    .dst_binding(*first_binding)
-                    .dst_set(descriptor_sets[*set])
-                    .descriptor_type(*descriptor_type);
-                if *is_image {
-                    write.image_info(image_infos)
-                } else {
-                    write.buffer_info(buffer_infos)
-                }
-            })
-            .collect_vec();
+        let pipeline_infos =
+            vec![vk::ComputePipelineCreateInfoBuilder::new().layout(layout).stage(shader_stage.build_dangling())];
+
+        let pipeline = unsafe {
+            vk_ctx
+                .device
+                .create_compute_pipelines(vk::PipelineCache::null(), &pipeline_infos, None)
+                .expect("Cannot create pipelines")[0]
+        };
 
         unsafe {
-            vk_ctx.device.update_descriptor_sets(&descriptor_writes, &[]);
+            vk_ctx.device.destroy_shader_module(compute_shader, None);
         }
+
+        Self { samplers, descriptor_set_layouts, descriptor_pool, descriptor_sets, layout, pipeline }
+    }
+
+    pub fn graphics(vk_ctx: VulkanContext, create_info: GraphicsPipelineCreateInfo) -> Self {
+        let samplers =
+            create_info.sampler_infos.into_iter().map(|info| info.create_sampler(&vk_ctx.device)).collect_vec();
+
+        let descriptor_set_layouts = create_info
+            .descriptor_sets_infos
+            .iter()
+            .map(|set_info| set_info.create_layout(&vk_ctx.device))
+            .collect_vec();
+
+        let descriptor_pool = Self::create_descriptor_pool(&vk_ctx.device, &create_info.descriptor_sets_infos);
+
+        let descriptor_sets = unsafe {
+            vk_ctx
+                .device
+                .allocate_descriptor_sets(
+                    &vk::DescriptorSetAllocateInfoBuilder::new()
+                        .descriptor_pool(descriptor_pool)
+                        .set_layouts(&descriptor_set_layouts),
+                )
+                .expect("Cannot allocate descriptor sets")
+        };
+
+        Self::update_descriptor_sets(&vk_ctx.device, &create_info.descriptor_sets_infos, &descriptor_sets, &samplers);
 
         let vertex_shader = make_shader_module(&vk_ctx.device, create_info.vertex_shader);
         let fragment_shader = make_shader_module(&vk_ctx.device, create_info.fragment_shader);
@@ -289,7 +238,110 @@ impl GraphicsPipeline {
             vk_ctx.device.destroy_shader_module(fragment_shader, None);
         }
 
-        GraphicsPipeline { samplers, descriptor_set_layouts, descriptor_pool, descriptor_sets, layout, pipeline }
+        Self { samplers, descriptor_set_layouts, descriptor_pool, descriptor_sets, layout, pipeline }
+    }
+
+    fn create_descriptor_pool(
+        device: &DeviceLoader,
+        descriptor_sets_infos: &[DescriptorSetCreateInfo],
+    ) -> vk::DescriptorPool {
+        let sizes = descriptor_sets_infos
+            .iter()
+            .flat_map(|set_info| set_info.descriptor_infos.iter())
+            .map(|bind_info| bind_info.descriptor_type)
+            .dedup()
+            .map(|descriptor_type| vk::DescriptorPoolSizeBuilder::new()._type(descriptor_type).descriptor_count(10))
+            .collect_vec();
+        let create_info = vk::DescriptorPoolCreateInfoBuilder::new().max_sets(10).pool_sizes(&sizes);
+        unsafe { device.create_descriptor_pool(&create_info, None).expect("Cannot create descriptor pool") }
+    }
+
+    fn update_descriptor_sets(
+        device: &DeviceLoader,
+        descriptor_sets_infos: &[DescriptorSetCreateInfo],
+        descriptor_sets: &[vk::DescriptorSet],
+        samplers: &[vk::Sampler],
+    ) {
+        let mut descriptor_writes_data = Vec::new();
+        for (set, set_info) in descriptor_sets_infos.iter().enumerate() {
+            let mut curr_is_image = set_info.descriptor_infos[0].image_info.is_some();
+            let mut curr_type = set_info.descriptor_infos[0].descriptor_type;
+            let mut buffer_infos = Vec::new();
+            let mut image_infos = Vec::new();
+            let mut first_binding = 0u32;
+            for (i, binding_info) in set_info.descriptor_infos.iter().enumerate() {
+                assert_ne!(binding_info.buffer_info.is_some(), binding_info.image_info.is_some());
+
+                if curr_type != binding_info.descriptor_type || curr_is_image != binding_info.image_info.is_some() {
+                    descriptor_writes_data.push((
+                        set,
+                        first_binding,
+                        curr_type,
+                        curr_is_image,
+                        buffer_infos,
+                        image_infos,
+                    ));
+                    curr_type = binding_info.descriptor_type;
+                    curr_is_image = binding_info.image_info.is_some();
+                    buffer_infos = Vec::new();
+                    image_infos = Vec::new();
+                    first_binding = i as u32;
+                }
+
+                if binding_info.buffer_info.is_some() {
+                    buffer_infos.push(binding_info.buffer_info.unwrap().into_builder());
+                } else {
+                    let image_info = if let Some(sampler_index) = binding_info.sampler_index {
+                        binding_info.image_info.unwrap().sampler(samplers[sampler_index])
+                    } else {
+                        binding_info.image_info.unwrap()
+                    };
+                    image_infos.push(image_info.into_builder());
+                }
+
+                if i == set_info.descriptor_infos.len() - 1 {
+                    descriptor_writes_data.push((
+                        set,
+                        first_binding,
+                        curr_type,
+                        curr_is_image,
+                        buffer_infos,
+                        image_infos,
+                    ));
+                    break; // This is just an easy way to dismiss the "use of moved value" error.
+                }
+            }
+        }
+
+        let descriptor_writes = descriptor_writes_data
+            .iter()
+            .map(|(set, first_binding, descriptor_type, is_image, buffer_infos, image_infos)| {
+                let write = vk::WriteDescriptorSetBuilder::new()
+                    .dst_binding(*first_binding)
+                    .dst_set(descriptor_sets[*set])
+                    .descriptor_type(*descriptor_type);
+                if *is_image {
+                    write.image_info(image_infos)
+                } else {
+                    write.buffer_info(buffer_infos)
+                }
+            })
+            .collect_vec();
+
+        unsafe {
+            device.update_descriptor_sets(&descriptor_writes, &[]);
+        }
+    }
+
+    fn create_pipeline_layout(
+        device: &DeviceLoader,
+        descriptor_set_layouts: &[vk::DescriptorSetLayout],
+        push_constant_ranges: &[vk::PushConstantRangeBuilder],
+    ) -> vk::PipelineLayout {
+        let create_info = vk::PipelineLayoutCreateInfoBuilder::new()
+            .set_layouts(descriptor_set_layouts)
+            .push_constant_ranges(push_constant_ranges);
+        unsafe { device.create_pipeline_layout(&create_info, None).expect("Cannot create graphics pipeline layout") }
     }
 
     pub fn destroy(&self, device: &DeviceLoader) {
@@ -309,7 +361,8 @@ impl GraphicsPipeline {
 
 impl<'a> DescriptorBindingCreateInfo<'a> {
     pub fn buffer(
-        descriptor_type: vk::DescriptorType, shader_stage_flags: vk::ShaderStageFlags,
+        descriptor_type: vk::DescriptorType,
+        shader_stage_flags: vk::ShaderStageFlags,
         buffer_info: vk::DescriptorBufferInfoBuilder<'a>,
     ) -> Self {
         Self {
@@ -322,8 +375,10 @@ impl<'a> DescriptorBindingCreateInfo<'a> {
     }
 
     pub fn image(
-        descriptor_type: vk::DescriptorType, shader_stage_flags: vk::ShaderStageFlags,
-        image_info: vk::DescriptorImageInfoBuilder<'a>, sampler_index: usize,
+        descriptor_type: vk::DescriptorType,
+        shader_stage_flags: vk::ShaderStageFlags,
+        image_info: vk::DescriptorImageInfoBuilder<'a>,
+        sampler_index: usize,
     ) -> Self {
         Self {
             descriptor_type,
@@ -332,5 +387,36 @@ impl<'a> DescriptorBindingCreateInfo<'a> {
             image_info: Some(image_info),
             sampler_index: Some(sampler_index),
         }
+    }
+}
+
+impl SamplerCreateInfo {
+    pub fn create_sampler(&self, device: &DeviceLoader) -> vk::Sampler {
+        let create_info = vk::SamplerCreateInfoBuilder::new()
+            .address_mode_u(self.address_mode)
+            .address_mode_v(self.address_mode)
+            .address_mode_w(self.address_mode)
+            .min_filter(self.filter)
+            .mag_filter(self.filter);
+        unsafe { device.create_sampler(&create_info, None).expect("Cannot create sampler") }
+    }
+}
+
+impl DescriptorSetCreateInfo<'_> {
+    pub fn create_layout(&self, device: &DeviceLoader) -> vk::DescriptorSetLayout {
+        let infos = self
+            .descriptor_infos
+            .iter()
+            .enumerate()
+            .map(|(binding, bind_info)| {
+                vk::DescriptorSetLayoutBindingBuilder::new()
+                    .binding(binding as u32)
+                    .descriptor_count(1)
+                    .descriptor_type(bind_info.descriptor_type)
+                    .stage_flags(bind_info.shader_stage_flags)
+            })
+            .collect_vec();
+        let create_info = vk::DescriptorSetLayoutCreateInfoBuilder::new().bindings(&infos);
+        unsafe { device.create_descriptor_set_layout(&create_info, None).expect("Cannot create descriptor set layout") }
     }
 }

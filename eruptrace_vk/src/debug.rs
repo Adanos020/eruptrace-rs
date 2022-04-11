@@ -2,11 +2,11 @@ use std::ffi::{c_void, CStr};
 
 use erupt::vk;
 
-/// # Safety
-/// lol what
 pub unsafe extern "system" fn debug_callback(
-    severity: vk::DebugUtilsMessageSeverityFlagBitsEXT, _types: vk::DebugUtilsMessageTypeFlagsEXT,
-    callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT, _user_data: *mut c_void,
+    severity: vk::DebugUtilsMessageSeverityFlagBitsEXT,
+    _types: vk::DebugUtilsMessageTypeFlagsEXT,
+    callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _user_data: *mut c_void,
 ) -> vk::Bool32 {
     if callback_data.is_null() {
         return vk::FALSE;
