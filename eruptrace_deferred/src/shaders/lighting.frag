@@ -191,11 +191,22 @@ void main() {
     bool hitOccured = position.w == 1.f;
     if (hitOccured) {
         // Geometry
-        vec3 normal = texture(inNormals, uv).xyz;
         vec4 material = texture(inMaterials, uv);
-        vec2 texCoord = material.xy;
-        uint materialIndex = uint(material.z);
-        fragColour = vec4(position.xyz, 1.f);
+        vec3 normal = texture(inNormals, uv).xyz;
+        float dotRayNorm = dot(ray.direction, normal);
+
+        Hit hit;
+        hit.position = position.xyz;
+        hit.normal = normal;
+        hit.texCoords = material.xy;
+        hit.incidental = ray.direction;
+        hit.materialIndex = uint(material.z);
+        hit.bFrontFace = dotRayNorm < 0.f;
+
+        Scattering initialScattering;
+        scatter(hit, initialScattering);
+
+        fragColour = initialScattering.color * trace(initialScattering.newRay);
     } else {
         // Sky
         vec3 rayDir = normalize(ray.direction);
@@ -261,8 +272,8 @@ bool hitShapeBih(in Ray ray, out Hit hit) {
             bool hit2Occurred = dist2 <= currEntry.maxDistance;
 
             uint children[2] = uint[](
-            bihNodes[currEntry.nodeIndex].childLeft,
-            bihNodes[currEntry.nodeIndex].childRight
+                bihNodes[currEntry.nodeIndex].childLeft,
+                bihNodes[currEntry.nodeIndex].childRight
             );
 
             if (hit1Occurred) {
