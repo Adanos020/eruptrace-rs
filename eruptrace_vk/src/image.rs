@@ -164,6 +164,33 @@ impl AllocatedImage {
         Self::new(vk_ctx, image_info, Some(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL), view_type, range)
     }
 
+    pub fn depth_buffer(vk_ctx: VulkanContext, extent: vk::Extent3D) -> Self {
+        let image_info = vk::ImageCreateInfoBuilder::new()
+            .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+            .format(vk::Format::D32_SFLOAT)
+            .extent(extent)
+            .array_layers(1)
+            .mip_levels(1)
+            .samples(vk::SampleCountFlagBits::_1)
+            .image_type(vk::ImageType::_2D);
+
+        let range = vk::ImageSubresourceRangeBuilder::new()
+            .aspect_mask(vk::ImageAspectFlags::DEPTH)
+            .base_mip_level(0)
+            .level_count(1)
+            .base_array_layer(0)
+            .layer_count(1)
+            .build();
+
+        Self::new(
+            vk_ctx,
+            image_info,
+            Some(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL),
+            vk::ImageViewType::_2D,
+            range,
+        )
+    }
+
     pub fn gbuffer(
         vk_ctx: VulkanContext,
         format: vk::Format,

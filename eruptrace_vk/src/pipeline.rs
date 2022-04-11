@@ -35,6 +35,7 @@ pub struct GraphicsPipelineCreateInfo<'a> {
     pub rasterisation_state:     RasterisationStateInfo,
     pub descriptor_sets_infos:   Vec<DescriptorSetCreateInfo<'a>>,
     pub sampler_infos:           Vec<SamplerCreateInfo>,
+    pub enable_depth_testing:    bool,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -163,7 +164,8 @@ impl Pipeline {
                 .name(&entry_point),
         ];
 
-        let layout = Self::create_pipeline_layout(&vk_ctx.device, &descriptor_set_layouts, &create_info.push_constant_ranges);
+        let layout =
+            Self::create_pipeline_layout(&vk_ctx.device, &descriptor_set_layouts, &create_info.push_constant_ranges);
 
         let dynamic_pipeline_state = vk::PipelineDynamicStateCreateInfoBuilder::new()
             .dynamic_states(&[vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR]);
@@ -175,8 +177,13 @@ impl Pipeline {
             .rasterization_samples(vk::SampleCountFlagBits::_1);
 
         let color_attachment_formats = create_info.color_attachment_infos.iter().map(|info| info.format).collect_vec();
-        let mut pipeline_rendering_info =
-            vk::PipelineRenderingCreateInfoBuilder::new().color_attachment_formats(&color_attachment_formats);
+        let mut pipeline_rendering_info = vk::PipelineRenderingCreateInfoBuilder::new()
+            .color_attachment_formats(&color_attachment_formats)
+            .depth_attachment_format(if create_info.enable_depth_testing {
+                vk::Format::D32_SFLOAT
+            } else {
+                vk::Format::UNDEFINED
+            });
 
         let colour_blend_attachments = create_info
             .color_attachment_infos
@@ -204,6 +211,19 @@ impl Pipeline {
             .front_face(create_info.rasterisation_state.front_face)
             .depth_clamp_enable(false);
 
+        let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfoBuilder::new()
+            .depth_test_enable(create_info.enable_depth_testing)
+            .depth_write_enable(create_info.enable_depth_testing)
+            .depth_compare_op(if create_info.enable_depth_testing {
+                vk::CompareOp::LESS_OR_EQUAL
+            } else {
+                vk::CompareOp::ALWAYS
+            })
+            .depth_bounds_test_enable(false)
+            .stencil_test_enable(false)
+            .min_depth_bounds(0.0)
+            .max_depth_bounds(1.0);
+
         let pipeline_infos = vec![vk::GraphicsPipelineCreateInfoBuilder::new()
             .vertex_input_state(&vertex_input)
             .color_blend_state(&colour_blending_info)
@@ -214,6 +234,7 @@ impl Pipeline {
             .dynamic_state(&dynamic_pipeline_state)
             .viewport_state(&viewport_state)
             .input_assembly_state(&create_info.input_assembly)
+            .depth_stencil_state(&depth_stencil_state)
             .extend_from(&mut pipeline_rendering_info)];
 
         let pipeline = unsafe {

@@ -149,6 +149,7 @@ impl PureRayTracer {
                 address_mode: vk::SamplerAddressMode::REPEAT,
                 filter:       vk::Filter::LINEAR,
             }],
+            enable_depth_testing:    false,
         });
 
         Self {

@@ -17,7 +17,6 @@ impl GBuffers {
                 .clear_value(vk::ClearValue { color: vk::ClearColorValue { float32: [0.0, 0.0, 0.0, 0.0] } })
                 .load_op(vk::AttachmentLoadOp::CLEAR)
                 .store_op(vk::AttachmentStoreOp::STORE)
-                .resolve_image_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
         };
         vec![
             make_attachment_info(self.out_positions.view),

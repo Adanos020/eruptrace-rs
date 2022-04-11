@@ -128,6 +128,7 @@ impl RenderSurface {
                 address_mode: vk::SamplerAddressMode::REPEAT,
                 filter:       vk::Filter::NEAREST,
             }],
+            enable_depth_testing:    false,
         });
 
         Ok(Self {

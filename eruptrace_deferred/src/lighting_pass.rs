@@ -182,6 +182,7 @@ impl LightingPass {
                 },
                 SamplerCreateInfo { address_mode: vk::SamplerAddressMode::REPEAT, filter: vk::Filter::LINEAR },
             ],
+            enable_depth_testing:    false,
         });
 
         Self {
@@ -203,7 +204,7 @@ impl LightingPass {
     pub fn update_output(&mut self, device: &DeviceLoader, extent: vk::Extent2D, gbuffers: &GBuffers) {
         self.output_extent = extent;
 
-        let write =vk::WriteDescriptorSetBuilder::new()
+        let write = vk::WriteDescriptorSetBuilder::new()
             .dst_set(self.graphics_pipeline.descriptor_sets[0])
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER);
         let info = vk::DescriptorImageInfoBuilder::new()
@@ -214,9 +215,7 @@ impl LightingPass {
             info.image_view(gbuffers.out_normals.view),
             info.image_view(gbuffers.out_materials.view),
         ];
-        let descriptor_writes = vec![
-            write.dst_binding(0).image_info(&image_infos),
-        ];
+        let descriptor_writes = vec![write.dst_binding(0).image_info(&image_infos)];
 
         unsafe {
             device.update_descriptor_sets(&descriptor_writes, &[]);

@@ -74,6 +74,7 @@ pub struct GeometryPass {
 
     output_extent: vk::Extent2D,
     pub gbuffers:  GBuffers,
+    depth_buffer:  AllocatedImage,
 
     graphics_pipeline: Pipeline,
 }
@@ -168,20 +169,16 @@ impl GeometryPass {
         };
 
         // Output images
-        let make_gbuffer = |format| {
-            AllocatedImage::gbuffer(
-                vk_ctx.clone(),
-                format,
-                vk::Extent3D { width: 1, height: 1, depth: 1 },
-                vk::ImageViewType::_2D,
-                1,
-                1,
-            )
-        };
+        let output_extent = vk::Extent3D { width: 1, height: 1, depth: 1 };
+
+        let make_gbuffer =
+            |format| AllocatedImage::gbuffer(vk_ctx.clone(), format, output_extent, vk::ImageViewType::_2D, 1, 1);
 
         let out_positions = make_gbuffer(vk::Format::R32G32B32A32_SFLOAT);
         let out_normals = make_gbuffer(vk::Format::R32G32B32A32_SFLOAT);
         let out_materials = make_gbuffer(vk::Format::R32G32B32A32_SFLOAT);
+
+        let depth_buffer = AllocatedImage::depth_buffer(vk_ctx.clone(), output_extent);
 
         // Graphics pipeline
         let graphics_pipeline = Pipeline::graphics(vk_ctx.clone(), GraphicsPipelineCreateInfo {
@@ -256,6 +253,7 @@ impl GeometryPass {
                 },
             ],
             sampler_infos:           vec![],
+            enable_depth_testing:    true,
         });
 
         Ok(Self {
@@ -266,6 +264,7 @@ impl GeometryPass {
             camera_uniforms,
             output_extent: vk::Extent2D { width: camera.img_size[0], height: camera.img_size[1] },
             gbuffers: GBuffers { out_positions, out_normals, out_materials },
+            depth_buffer,
             graphics_pipeline,
         })
     }
@@ -276,6 +275,7 @@ impl GeometryPass {
         self.camera_uniforms.destroy();
         self.mesh_metas.destroy();
         self.gbuffers.destroy(device);
+        self.depth_buffer.destroy(device);
         self.graphics_pipeline.destroy(device);
     }
 
@@ -294,32 +294,36 @@ impl GeometryPass {
         };
         self.camera_uniforms.set_data(&[data]);
 
-        let make_color_attachment = |format| {
-            AllocatedImage::gbuffer(
-                vk_ctx.clone(),
-                format,
-                vk::Extent3D { width: camera.img_size[0], height: camera.img_size[1], depth: 1 },
-                vk::ImageViewType::_2D,
-                1,
-                1,
-            )
-        };
+        self.output_extent = vk::Extent2D { width: camera.img_size[0], height: camera.img_size[1] };
+        let image_extent = vk::Extent3D { width: camera.img_size[0], height: camera.img_size[1], depth: 1 };
+
+        let make_color_attachment =
+            |format| AllocatedImage::gbuffer(vk_ctx.clone(), format, image_extent, vk::ImageViewType::_2D, 1, 1);
 
         self.gbuffers.out_positions.destroy(&vk_ctx.device);
         self.gbuffers.out_normals.destroy(&vk_ctx.device);
         self.gbuffers.out_materials.destroy(&vk_ctx.device);
+        self.depth_buffer.destroy(&vk_ctx.device);
 
         self.gbuffers.out_positions = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
         self.gbuffers.out_normals = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
         self.gbuffers.out_materials = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
-
-        self.output_extent = vk::Extent2D { width: camera.img_size[0], height: camera.img_size[1] };
+        self.depth_buffer = AllocatedImage::depth_buffer(vk_ctx.clone(), image_extent);
     }
 
     pub fn render(&self, vk_ctx: VulkanContext) {
         let colour_attachments = self.gbuffers.create_colour_attachment_infos();
+        let depth_attachment = vk::RenderingAttachmentInfoBuilder::new()
+            .image_view(self.depth_buffer.view)
+            .image_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            .clear_value(vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue { depth: 1.0, ..Default::default() },
+            })
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE);
         let rendering_info = vk::RenderingInfoBuilder::new()
             .color_attachments(&colour_attachments)
+            .depth_attachment(&depth_attachment)
             .layer_count(1)
             .render_area(vk::Rect2D { offset: Default::default(), extent: self.output_extent });
 
