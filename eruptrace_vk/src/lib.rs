@@ -6,6 +6,7 @@ pub mod contexts;
 pub mod debug;
 pub mod image;
 pub mod pipeline;
+pub mod push_constants;
 pub mod shader;
 pub mod std140;
 

@@ -13,12 +13,12 @@ use eruptrace_vk::{
         RasterisationStateInfo,
         SamplerCreateInfo,
     },
+    push_constants::RtPushConstants,
     AllocatedBuffer,
     AllocatedImage,
     VulkanContext,
 };
 use nalgebra_glm as glm;
-use std140::repr_std140;
 use vk_mem_erupt as vma;
 
 use crate::{
@@ -32,19 +32,10 @@ pub struct Vertex {
     pub position: glm::Vec2,
 }
 
-#[repr_std140]
-#[derive(Copy, Clone, Debug)]
-struct PushConstants {
-    n_triangles:    std140::uint,
-    use_bih:        std140::boolean,
-    render_normals: std140::boolean,
-}
-
 #[derive(Clone)]
 pub struct LightingPass {
     vertex_buffer:     AllocatedBuffer<Vertex>,
     output_extent:     vk::Extent2D,
-    push_constants:    PushConstants,
     graphics_pipeline: Pipeline,
 }
 
@@ -79,7 +70,7 @@ impl LightingPass {
             }],
             push_constant_ranges:    vec![vk::PushConstantRangeBuilder::new()
                 .offset(0)
-                .size(std::mem::size_of::<PushConstants>() as u32)
+                .size(std::mem::size_of::<RtPushConstants>() as u32)
                 .stage_flags(vk::ShaderStageFlags::FRAGMENT)],
             input_assembly:          vk::PipelineInputAssemblyStateCreateInfoBuilder::new()
                 .topology(vk::PrimitiveTopology::TRIANGLE_STRIP)
@@ -186,16 +177,7 @@ impl LightingPass {
             enable_depth_testing:    false,
         });
 
-        Self {
-            vertex_buffer,
-            output_extent,
-            push_constants: PushConstants {
-                n_triangles:    std140::uint(scene_buffers.n_triangles),
-                use_bih:        std140::boolean::True,
-                render_normals: std140::boolean::False,
-            },
-            graphics_pipeline,
-        }
+        Self { vertex_buffer, output_extent, graphics_pipeline }
     }
 
     pub fn destroy(&self, device: &DeviceLoader) {
@@ -224,7 +206,7 @@ impl LightingPass {
         }
     }
 
-    pub fn render(&self, vk_ctx: VulkanContext, target: &AllocatedImage) {
+    pub fn render(&self, vk_ctx: VulkanContext, push_constants: &RtPushConstants, target: &AllocatedImage) {
         command::immediate_submit(vk_ctx, |device, command_buffer| unsafe {
             command::set_scissor_and_viewport(device, command_buffer, self.output_extent);
 
@@ -268,8 +250,8 @@ impl LightingPass {
                 self.graphics_pipeline.layout,
                 vk::ShaderStageFlags::FRAGMENT,
                 0,
-                std::mem::size_of::<PushConstants>() as u32,
-                &self.push_constants as *const PushConstants as *const c_void,
+                std::mem::size_of::<RtPushConstants>() as u32,
+                push_constants as *const RtPushConstants as *const c_void,
             );
             device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.vertex_buffer.buffer], &[0]);
             device.cmd_draw(command_buffer, 4, 1, 0, 0);

@@ -7,7 +7,7 @@ pub mod shaders;
 
 use erupt::{vk, DeviceLoader};
 use eruptrace_scene::{Camera, CameraUniform, Mesh as SceneMesh, SceneBuffers};
-use eruptrace_vk::{AllocatedBuffer, AllocatedImage, VulkanContext};
+use eruptrace_vk::{push_constants::RtPushConstants, AllocatedBuffer, AllocatedImage, VulkanContext};
 
 use crate::{geometry_pass::GeometryPass, lighting_pass::LightingPass};
 
@@ -45,8 +45,8 @@ impl DeferredRayTracer {
         );
     }
 
-    pub fn render(&self, vk_ctx: VulkanContext, target: &AllocatedImage) {
+    pub fn render(&self, vk_ctx: VulkanContext, push_constants: &RtPushConstants, target: &AllocatedImage) {
         self.geometry_pass.render(vk_ctx.clone());
-        self.lighting_pass.render(vk_ctx, target);
+        self.lighting_pass.render(vk_ctx, push_constants, target);
     }
 }

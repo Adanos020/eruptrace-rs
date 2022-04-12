@@ -17,6 +17,9 @@ const uint BIH_BRANCH_Y = 1;
 const uint BIH_BRANCH_Z = 2;
 const uint BIH_LEAF = 3;
 
+const uint FLAG_USE_BIH = 1 << 0;
+const uint FLAG_RENDER_NORMALS = 1 << 1;
+
 // Ray tracing ---------------------------------------------------------------------------------------------------------
 
 vec4 trace(Ray ray);
@@ -35,7 +38,7 @@ vec4 trace(Ray ray) {
     vec4 finalColor = vec4(1.f);
     for (int iReflection = 0; iReflection < camera.maxReflections; ++iReflection) {
         Hit hit;
-        if (bUseBih ? hitShapeBih(ray, hit) : hitShapeBruteforce(ray, hit)) {
+        if ((flags & FLAG_USE_BIH) != 0 ? hitShapeBih(ray, hit) : hitShapeBruteforce(ray, hit)) {
             Scattering scattering;
             bool bScattered = scatter(hit, scattering);
             finalColor *= scattering.color;
@@ -191,7 +194,7 @@ bool scatter(Hit hit, out Scattering scattering) {
     vec3 mappedNormal = sampleNormalMap(hit.texCoords, material.normalMapIndex);
     hit.normal = mapNormal(hit.normal, mappedNormal);
 
-    if (bRenderNormals) {
+    if ((flags & FLAG_RENDER_NORMALS) != 0) {
         scattering.color = vec4(0.5f + (0.5f * hit.normal), 1.f);
         return false;
     } else {

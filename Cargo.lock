@@ -439,6 +439,7 @@ dependencies = [
 name = "eruptrace_vk"
 version = "0.1.0"
 dependencies = [
+ "bitflags",
  "erupt",
  "itertools",
  "nalgebra-glm",

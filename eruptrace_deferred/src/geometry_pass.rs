@@ -169,8 +169,7 @@ impl GeometryPass {
         };
 
         // Output images
-        let output_extent =
-            vk::Extent3D { width: 1 * camera.sqrt_samples, height: 1 * camera.sqrt_samples, depth: 1 };
+        let output_extent = vk::Extent3D { width: camera.sqrt_samples, height: camera.sqrt_samples, depth: 1 };
 
         let make_gbuffer =
             |format| AllocatedImage::gbuffer(vk_ctx.clone(), format, output_extent, vk::ImageViewType::_2D, 1, 1);

@@ -12,6 +12,7 @@ use eruptrace_vk::{
     command,
     contexts::{FrameContext, PipelineContext, RenderContext, VulkanContext},
     debug::debug_callback,
+    push_constants::{RtFlags, RtPushConstants},
     AllocatedBuffer,
 };
 use vk_mem_erupt as vma;
@@ -34,9 +35,10 @@ pub struct App {
     upload_fence:          vk::Fence,
     allocator:             Option<Arc<RwLock<vma::Allocator>>>,
 
-    camera:           Camera,
-    rt_camera_buffer: Option<AllocatedBuffer<CameraUniform>>,
-    rt_scene_buffers: Option<SceneBuffers>,
+    camera:            Camera,
+    rt_camera_buffer:  Option<AllocatedBuffer<CameraUniform>>,
+    rt_scene_buffers:  Option<SceneBuffers>,
+    rt_push_constants: RtPushConstants,
 
     render_surface:      Option<RenderSurface>,
     pure_ray_tracer:     Option<PureRayTracer>,
@@ -227,6 +229,10 @@ impl App {
             upload_fence,
             allocator,
             camera,
+            rt_push_constants: RtPushConstants {
+                n_triangles: rt_scene_buffers.as_ref().unwrap().n_triangles,
+                flags:       RtFlags::USE_BIH,
+            },
             rt_camera_buffer,
             rt_scene_buffers,
             render_surface,
@@ -252,7 +258,11 @@ impl App {
         self.pure_ray_tracer.as_mut().unwrap().set_output_extent(extent);
         self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx.clone(), self.camera);
 
-        self.deferred_ray_tracer.as_mut().unwrap().render(vk_ctx, &self.render_surface.as_ref().unwrap().render_image);
+        self.deferred_ray_tracer.as_mut().unwrap().render(
+            vk_ctx,
+            &self.rt_push_constants,
+            &self.render_surface.as_ref().unwrap().render_image,
+        );
     }
 
     pub fn render(&mut self) {
