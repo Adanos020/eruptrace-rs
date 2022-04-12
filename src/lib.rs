@@ -252,7 +252,7 @@ impl App {
         self.pure_ray_tracer.as_mut().unwrap().set_output_extent(extent);
         self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx.clone(), self.camera);
 
-        self.pure_ray_tracer.as_mut().unwrap().render(vk_ctx, &self.render_surface.as_ref().unwrap().render_image);
+        self.deferred_ray_tracer.as_mut().unwrap().render(vk_ctx, &self.render_surface.as_ref().unwrap().render_image);
     }
 
     pub fn render(&mut self) {

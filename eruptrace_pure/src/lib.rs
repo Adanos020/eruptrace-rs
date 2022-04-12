@@ -36,8 +36,9 @@ pub struct Vertex {
 #[repr_std140]
 #[derive(Copy, Clone, Debug)]
 struct PushConstants {
-    n_triangles: std140::uint,
-    use_bih:     std140::boolean,
+    n_triangles:    std140::uint,
+    use_bih:        std140::boolean,
+    render_normals: std140::boolean,
 }
 
 #[derive(Clone)]
@@ -156,8 +157,9 @@ impl PureRayTracer {
             vertex_buffer,
             output_extent,
             push_constants: PushConstants {
-                n_triangles: std140::uint(scene_buffers.n_triangles),
-                use_bih:     std140::boolean::True,
+                n_triangles:    std140::uint(scene_buffers.n_triangles),
+                use_bih:        std140::boolean::True,
+                render_normals: std140::boolean::False,
             },
             graphics_pipeline,
         }

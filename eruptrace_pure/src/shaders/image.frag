@@ -1,7 +1,5 @@
 #version 450
 
-#define RENDER_NORMALS 0
-
 #include <structs.glsl>
 
 layout(location = 0) out vec4 fragColour;
@@ -31,6 +29,7 @@ layout(set = 0, binding = 5, std140) readonly buffer TriangleData {
 layout(push_constant) uniform Constants {
     uint nTriangles;
     bool bUseBih;
+    bool bRenderNormals;
 };
 
 #include <ray_tracing.glsl>

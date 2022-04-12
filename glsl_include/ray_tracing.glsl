@@ -191,26 +191,26 @@ bool scatter(Hit hit, out Scattering scattering) {
     vec3 mappedNormal = sampleNormalMap(hit.texCoords, material.normalMapIndex);
     hit.normal = mapNormal(hit.normal, mappedNormal);
 
-#if RENDER_NORMALS
-    scattering.color = vec4(0.5f + (0.5f * hit.normal), 1.f);
-    return false;
-#endif
-
-    switch (material.materialType) {
-        case MATERIAL_DIFFUSIVE: {
-            return scatterDiffusive(hit, material, scattering);
-        }
-        case MATERIAL_REFLECTIVE: {
-            return scatterReflective(hit, material, scattering);
-        }
-        case MATERIAL_REFRACTIVE: {
-            return scatterRefractive(hit, material, scattering);
-        }
-        case MATERIAL_EMITTING: {
-            return scatterEmitting(hit, material, scattering);
-        }
-        default: {
-            return false;
+    if (bRenderNormals) {
+        scattering.color = vec4(0.5f + (0.5f * hit.normal), 1.f);
+        return false;
+    } else {
+        switch (material.materialType) {
+            case MATERIAL_DIFFUSIVE: {
+                return scatterDiffusive(hit, material, scattering);
+            }
+            case MATERIAL_REFLECTIVE: {
+                return scatterReflective(hit, material, scattering);
+            }
+            case MATERIAL_REFRACTIVE: {
+                return scatterRefractive(hit, material, scattering);
+            }
+            case MATERIAL_EMITTING: {
+                return scatterEmitting(hit, material, scattering);
+            }
+            default: {
+                return false;
+            }
         }
     }
 }
