@@ -169,7 +169,8 @@ impl GeometryPass {
         };
 
         // Output images
-        let output_extent = vk::Extent3D { width: 1, height: 1, depth: 1 };
+        let output_extent =
+            vk::Extent3D { width: 1 * camera.sqrt_samples, height: 1 * camera.sqrt_samples, depth: 1 };
 
         let make_gbuffer =
             |format| AllocatedImage::gbuffer(vk_ctx.clone(), format, output_extent, vk::ImageViewType::_2D, 1, 1);
@@ -294,11 +295,15 @@ impl GeometryPass {
         };
         self.camera_uniforms.set_data(&[data]);
 
-        self.output_extent = vk::Extent2D { width: camera.img_size[0], height: camera.img_size[1] };
-        let image_extent = vk::Extent3D { width: camera.img_size[0], height: camera.img_size[1], depth: 1 };
+        self.output_extent = vk::Extent2D {
+            width:  camera.img_size[0] * camera.sqrt_samples,
+            height: camera.img_size[1] * camera.sqrt_samples,
+        };
+        let gbuffer_extent =
+            vk::Extent3D { width: self.output_extent.width, height: self.output_extent.height, depth: 1 };
 
         let make_color_attachment =
-            |format| AllocatedImage::gbuffer(vk_ctx.clone(), format, image_extent, vk::ImageViewType::_2D, 1, 1);
+            |format| AllocatedImage::gbuffer(vk_ctx.clone(), format, gbuffer_extent, vk::ImageViewType::_2D, 1, 1);
 
         self.gbuffers.out_positions.destroy(&vk_ctx.device);
         self.gbuffers.out_normals.destroy(&vk_ctx.device);
@@ -308,7 +313,7 @@ impl GeometryPass {
         self.gbuffers.out_positions = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
         self.gbuffers.out_normals = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
         self.gbuffers.out_materials = make_color_attachment(vk::Format::R32G32B32A32_SFLOAT);
-        self.depth_buffer = AllocatedImage::depth_buffer(vk_ctx.clone(), image_extent);
+        self.depth_buffer = AllocatedImage::depth_buffer(vk_ctx.clone(), gbuffer_extent);
     }
 
     pub fn render(&self, vk_ctx: VulkanContext) {

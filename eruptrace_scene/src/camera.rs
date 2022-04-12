@@ -16,7 +16,7 @@ pub struct Camera {
     pub up:              glm::Vec3,
     pub vertical_fov:    f32,
     pub img_size:        [u32; 2],
-    pub samples:         u32,
+    pub sqrt_samples:    u32,
     pub max_reflections: u32,
 }
 
@@ -29,7 +29,7 @@ pub struct CameraUniform {
     bottom_left:         std140::vec4,
     img_size:            std140::vec2,
     img_size_inv:        std140::vec2,
-    pub samples:         std140::uint,
+    pub sqrt_samples:    std140::uint,
     pub max_reflections: std140::uint,
 }
 
@@ -39,10 +39,10 @@ impl Camera {
         let look_at = to_vec3(&object["look_at"]).unwrap();
         let up = to_vec3(&object["up"]).unwrap();
         let vertical_fov = object["fov"].as_f64().unwrap_or(90.0) as f32;
-        let samples = object["samples"].as_u64().unwrap_or(1) as u32;
+        let sqrt_samples = object["sqrt_samples"].as_u64().unwrap_or(1) as u32;
         let max_reflections = object["max_reflections"].as_u64().unwrap_or(1) as u32;
 
-        Ok(Camera { position, look_at, up, img_size: [0, 0], vertical_fov, samples, max_reflections })
+        Ok(Camera { position, look_at, up, img_size: [0, 0], vertical_fov, sqrt_samples, max_reflections })
     }
 
     pub fn into_uniform(self) -> CameraUniform {
@@ -70,7 +70,7 @@ impl Camera {
             bottom_left:     std140::vec4(bottom_left.x, bottom_left.y, bottom_left.z, 0.0),
             img_size:        std140::vec2(img_size.x, img_size.y),
             img_size_inv:    std140::vec2(1.0 / img_size.x, 1.0 / img_size.y),
-            samples:         std140::uint(self.samples),
+            sqrt_samples:    std140::uint(self.sqrt_samples),
             max_reflections: std140::uint(self.max_reflections),
         }
     }

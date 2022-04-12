@@ -83,7 +83,7 @@ layout(set = 0, binding = 2) uniform CameraUniform {
     vec4 bottomLeft;
     vec2 imgSize;
     vec2 imgSizeInv;
-    uint samples;
+    uint sqrtSamples;
     uint maxReflections;
 } camera;
 layout(set = 0, binding = 3, std140) readonly buffer BIH {
@@ -176,7 +176,8 @@ void main() {
     Ray ray;
     ray.origin = camera.position.xyz;
     vec4 pixelColor = vec4(0.f);
-    for (int i = 0; i < camera.samples; ++i) {
+    uint samples = camera.sqrtSamples * camera.sqrtSamples;
+    for (int i = 0; i < samples; ++i) {
         float u = (gl_FragCoord.x + rand(i)) * camera.imgSizeInv.x;
         float v = (camera.imgSize.y - gl_FragCoord.y + rand(i + 0.5f)) * camera.imgSizeInv.y;
         vec4 samplePosition = camera.bottomLeft + (u * camera.horizontal) + (v * camera.vertical);
@@ -184,7 +185,7 @@ void main() {
         ray.invDirection = 1.f / ray.direction;
         pixelColor += trace(ray);
     }
-    fragColour = sqrt(pixelColor / float(camera.samples));
+    fragColour = sqrt(pixelColor / float(samples));
 }
 
 vec4 trace(Ray ray) {
@@ -193,13 +194,12 @@ vec4 trace(Ray ray) {
         Hit hit;
         if (bUseBih ? hitShapeBih(ray, hit) : hitShapeBruteforce(ray, hit)) {
             Scattering scattering;
-            if (scatter(hit, scattering)) {
-                // Scattering
-                finalColor *= scattering.color;
+            bool bScattered = scatter(hit, scattering);
+            finalColor *= scattering.color;
+            if (bScattered) {
                 ray = scattering.newRay;
             } else {
                 // Emission
-                finalColor *= scattering.color;
                 break;
             }
         } else {
