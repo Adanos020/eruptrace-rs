@@ -38,7 +38,7 @@ pub struct Scene {
 }
 
 #[derive(Clone)]
-pub struct SceneBuffers {
+pub struct RtSceneBuffers {
     pub textures_image:    AllocatedImage,
     pub normal_maps_image: AllocatedImage,
     pub materials_buffer:  AllocatedBuffer<MaterialUniform>,
@@ -144,7 +144,7 @@ impl Scene {
         Ok((camera, scene))
     }
 
-    pub fn create_buffers(self, vk_ctx: VulkanContext) -> SceneBuffers {
+    pub fn create_buffers(self, vk_ctx: VulkanContext) -> RtSceneBuffers {
         let n_textures = self.texture_paths.len();
         let n_normal_maps = self.normal_map_paths.len();
         let n_triangles = self.meshes.len() as u32;
@@ -170,7 +170,7 @@ impl Scene {
             .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-        SceneBuffers {
+        RtSceneBuffers {
             textures_image: AllocatedImage::texture_with_data(
                 vk_ctx.clone(),
                 image_extent,
@@ -205,7 +205,7 @@ impl Scene {
     }
 }
 
-impl SceneBuffers {
+impl RtSceneBuffers {
     pub fn destroy(&self, device: &DeviceLoader) {
         self.textures_image.destroy(device);
         self.normal_maps_image.destroy(device);

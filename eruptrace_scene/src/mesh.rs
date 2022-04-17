@@ -38,9 +38,7 @@ pub struct Mesh {
 impl Mesh {
     pub fn from_json(object: &js::Value, material_names: &[String]) -> anyhow::Result<Self> {
         let positions = object["positions"].as_array().unwrap().iter().filter_map(to_vec3).collect_vec();
-
         let normals = object["normals"].as_array().unwrap().iter().filter_map(to_vec3).collect_vec();
-
         let texcoords = object["texcoords"].as_array().unwrap().iter().filter_map(to_vec2).collect_vec();
 
         let indices = object["indices"]

@@ -1,7 +1,7 @@
 use std::ffi::c_void;
 
 use erupt::{vk, DeviceLoader};
-use eruptrace_scene::{CameraUniform, SceneBuffers};
+use eruptrace_scene::{CameraUniform, RtSceneBuffers};
 use eruptrace_vk::{
     command,
     pipeline::{
@@ -45,7 +45,7 @@ impl LightingPass {
         output_extent: vk::Extent2D,
         gbuffers: &GBuffers,
         camera_buffer: &AllocatedBuffer<CameraUniform>,
-        scene_buffers: &SceneBuffers,
+        scene_buffers: &RtSceneBuffers,
     ) -> Self {
         let vertex_buffer = {
             let vertices = [

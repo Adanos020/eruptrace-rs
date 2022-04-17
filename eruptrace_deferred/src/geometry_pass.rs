@@ -262,7 +262,7 @@ impl GeometryPass {
             index_buffer,
             mesh_metas,
             camera_uniforms,
-            output_extent: vk::Extent2D { width: camera.img_size[0], height: camera.img_size[1] },
+            output_extent: camera.image_extent_2d(),
             gbuffers: GBuffers { out_positions, out_normals, out_materials },
             depth_buffer,
             graphics_pipeline,

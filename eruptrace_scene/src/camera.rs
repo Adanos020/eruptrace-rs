@@ -42,12 +42,24 @@ impl Camera {
         let sqrt_samples = object["sqrt_samples"].as_u64().unwrap_or(1) as u32;
         let max_reflections = object["max_reflections"].as_u64().unwrap_or(1) as u32;
 
-        Ok(Camera { position, look_at, up, img_size: [0, 0], vertical_fov, sqrt_samples, max_reflections })
+        Ok(Camera { position, look_at, up, img_size: [1, 1], vertical_fov, sqrt_samples, max_reflections })
+    }
+
+    pub fn image_extent_2d(&self) -> vk::Extent2D {
+        vk::Extent2D { width: self.img_size[0], height: self.img_size[1] }
+    }
+
+    pub fn image_extent_3d(&self) -> vk::Extent3D {
+        vk::Extent3D { width: self.img_size[0], height: self.img_size[1], depth: 1 }
+    }
+
+    pub fn aspect(&self) -> f32 {
+        self.img_size[0] as f32 / self.img_size[1] as f32
     }
 
     pub fn into_uniform(self) -> CameraUniform {
         let img_size = glm::vec2(self.img_size[0] as f32, self.img_size[1] as f32);
-        let aspect = img_size.x / img_size.y;
+        let aspect = self.aspect();
         let half_height = (self.vertical_fov.to_radians() * 0.5).tan();
         let half_width = aspect * half_height;
         let focus_distance = glm::distance(&self.position, &self.look_at);

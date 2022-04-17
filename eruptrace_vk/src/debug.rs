@@ -17,7 +17,7 @@ pub unsafe extern "system" fn debug_callback(
         eprintln!("Affected objects:");
         let objects = std::slice::from_raw_parts(callback_data.p_objects, callback_data.object_count as _);
         for (i, object) in objects.iter().enumerate() {
-            eprintln!("- Object {}: handle = {:#x}, type = {:?}", i, object.object_handle, object.object_type,);
+            eprintln!("- Object {}: handle = {:#x}, type = {:?}", i, object.object_handle, object.object_type);
         }
         eprintln!(
             "{}\n-------------------------------------",

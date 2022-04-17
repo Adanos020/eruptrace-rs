@@ -7,7 +7,7 @@ use erupt::{utils::surface, vk, DeviceLoader, EntryLoader, ExtendableFrom, Insta
 use erupt_bootstrap as vkb;
 use eruptrace_deferred::DeferredRayTracer;
 use eruptrace_pure::PureRayTracer;
-use eruptrace_scene::{camera::Camera, CameraUniform, Scene, SceneBuffers};
+use eruptrace_scene::{camera::Camera, CameraUniform, Scene, RtSceneBuffers};
 use eruptrace_vk::{
     command,
     contexts::{FrameContext, PipelineContext, RenderContext, VulkanContext},
@@ -35,9 +35,9 @@ pub struct App {
     upload_fence:          vk::Fence,
     allocator:             Option<Arc<RwLock<vma::Allocator>>>,
 
-    camera:            Camera,
+    rt_camera:         Camera,
     rt_camera_buffer:  Option<AllocatedBuffer<CameraUniform>>,
-    rt_scene_buffers:  Option<SceneBuffers>,
+    rt_scene_buffers:  Option<RtSceneBuffers>,
     rt_push_constants: RtPushConstants,
 
     render_surface:      Option<RenderSurface>,
@@ -46,7 +46,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(window: &Window, camera: Camera, scene: Scene) -> anyhow::Result<Self> {
+    pub fn new(window: &Window, rt_camera: Camera, scene: Scene) -> anyhow::Result<Self> {
         let entry = EntryLoader::new()?;
         let (instance, debug_messenger, instance_meta) = {
             let builder = vkb::InstanceBuilder::new()
@@ -191,7 +191,7 @@ impl App {
 
         let scene_meshes = scene.meshes.clone();
         let rt_scene_buffers = Some(scene.create_buffers(vk_ctx.clone()));
-        let rt_camera_buffer = Some(camera.into_uniform().create_buffer(vk_ctx.allocator.clone()));
+        let rt_camera_buffer = Some(rt_camera.into_uniform().create_buffer(vk_ctx.allocator.clone()));
 
         let render_surface = Some(RenderSurface::new(
             vk_ctx.clone(),
@@ -201,14 +201,14 @@ impl App {
 
         let pure_ray_tracer = Some(PureRayTracer::new(
             vk_ctx.clone(),
-            vk::Extent2D { width: camera.img_size[0], height: camera.img_size[1] },
+            rt_camera.image_extent_2d(),
             rt_camera_buffer.as_ref().unwrap(),
             rt_scene_buffers.as_ref().unwrap(),
         ));
 
         let deferred_ray_tracer = Some(DeferredRayTracer::new(
             vk_ctx,
-            camera,
+            rt_camera,
             scene_meshes,
             rt_camera_buffer.as_ref().unwrap(),
             rt_scene_buffers.as_ref().unwrap(),
@@ -228,7 +228,7 @@ impl App {
             frames,
             upload_fence,
             allocator,
-            camera,
+            rt_camera,
             rt_push_constants: RtPushConstants {
                 n_triangles: rt_scene_buffers.as_ref().unwrap().n_triangles,
                 flags:       RtFlags::USE_BIH,
@@ -251,12 +251,12 @@ impl App {
         };
 
         self.swapchain.update(extent);
-        self.camera.img_size = [extent.width, extent.height];
+        self.rt_camera.img_size = [extent.width, extent.height];
 
-        self.rt_camera_buffer.as_mut().unwrap().set_data(&[self.camera.into_uniform()]);
+        self.rt_camera_buffer.as_mut().unwrap().set_data(&[self.rt_camera.into_uniform()]);
         self.render_surface.as_mut().unwrap().update_image_size(vk_ctx.clone(), extent);
         self.pure_ray_tracer.as_mut().unwrap().set_output_extent(extent);
-        self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx.clone(), self.camera);
+        self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx.clone(), self.rt_camera);
 
         self.deferred_ray_tracer.as_mut().unwrap().render(
             vk_ctx,

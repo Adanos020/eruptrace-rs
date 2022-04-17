@@ -5,8 +5,8 @@ pub mod geometry_pass;
 pub mod lighting_pass;
 pub mod shaders;
 
-use erupt::{vk, DeviceLoader};
-use eruptrace_scene::{Camera, CameraUniform, Mesh as SceneMesh, SceneBuffers};
+use erupt::DeviceLoader;
+use eruptrace_scene::{Camera, CameraUniform, Mesh as SceneMesh, RtSceneBuffers};
 use eruptrace_vk::{push_constants::RtPushConstants, AllocatedBuffer, AllocatedImage, VulkanContext};
 
 use crate::{geometry_pass::GeometryPass, lighting_pass::LightingPass};
@@ -22,9 +22,9 @@ impl DeferredRayTracer {
         camera: Camera,
         scene_meshes: Vec<SceneMesh>,
         camera_buffer: &AllocatedBuffer<CameraUniform>,
-        scene_buffers: &SceneBuffers,
+        scene_buffers: &RtSceneBuffers,
     ) -> anyhow::Result<Self> {
-        let output_extent = vk::Extent2D { width: camera.img_size[0], height: camera.img_size[1] };
+        let output_extent = camera.image_extent_2d();
         let geometry_pass = GeometryPass::new(vk_ctx.clone(), &camera, scene_meshes)?;
         let lighting_pass =
             LightingPass::new(vk_ctx, output_extent, &geometry_pass.gbuffers, camera_buffer, scene_buffers);
@@ -40,7 +40,7 @@ impl DeferredRayTracer {
         self.geometry_pass.update_camera(vk_ctx.clone(), camera);
         self.lighting_pass.update_output(
             &vk_ctx.device,
-            vk::Extent2D { width: camera.img_size[0], height: camera.img_size[1] },
+            camera.image_extent_2d(),
             &self.geometry_pass.gbuffers,
         );
     }
