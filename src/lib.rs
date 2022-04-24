@@ -1,16 +1,17 @@
-mod render_surface;
+mod gui;
 mod shaders;
 
 use std::sync::{Arc, RwLock};
 
+use egui::{ClippedMesh, TexturesDelta};
 use erupt::{utils::surface, vk, DeviceLoader, EntryLoader, ExtendableFrom, InstanceLoader, SmallVec};
 use erupt_bootstrap as vkb;
 use eruptrace_deferred::DeferredRayTracer;
 use eruptrace_pure::PureRayTracer;
-use eruptrace_scene::{camera::Camera, CameraUniform, Scene, RtSceneBuffers};
+use eruptrace_scene::{camera::Camera, CameraUniform, RtSceneBuffers, Scene};
 use eruptrace_vk::{
     command,
-    contexts::{FrameContext, PipelineContext, RenderContext, VulkanContext},
+    contexts::{FrameContext, RenderContext, VulkanContext},
     debug::debug_callback,
     push_constants::{RtFlags, RtPushConstants},
     AllocatedBuffer,
@@ -18,7 +19,7 @@ use eruptrace_vk::{
 use vk_mem_erupt as vma;
 use winit::window::Window;
 
-use crate::render_surface::RenderSurface;
+use crate::gui::Gui;
 
 pub struct App {
     _entry:                EntryLoader,
@@ -35,12 +36,13 @@ pub struct App {
     upload_fence:          vk::Fence,
     allocator:             Option<Arc<RwLock<vma::Allocator>>>,
 
+    gui: Option<Gui>,
+
     rt_camera:         Camera,
     rt_camera_buffer:  Option<AllocatedBuffer<CameraUniform>>,
     rt_scene_buffers:  Option<RtSceneBuffers>,
     rt_push_constants: RtPushConstants,
 
-    render_surface:      Option<RenderSurface>,
     pure_ray_tracer:     Option<PureRayTracer>,
     deferred_ray_tracer: Option<DeferredRayTracer>,
 }
@@ -85,7 +87,7 @@ impl App {
             (Some(Arc::new(device)), device_meta, queue, queue_family)
         };
 
-        let format = {
+        let surface_format = {
             let surface_formats = unsafe {
                 instance
                     .as_ref()
@@ -110,7 +112,7 @@ impl App {
 
         let swapchain = {
             let mut swapchain_options = vkb::SwapchainOptions::default();
-            swapchain_options.format_preference(&[format]);
+            swapchain_options.format_preference(&[surface_format]);
             swapchain_options.present_mode_preference(&[vk::PresentModeKHR::MAILBOX_KHR, vk::PresentModeKHR::FIFO_KHR]);
             let [width, height]: [u32; 2] = window.inner_size().into();
             vkb::Swapchain::new(
@@ -189,15 +191,11 @@ impl App {
             upload_fence,
         };
 
+        let gui = Some(Gui::new(vk_ctx.clone(), swapchain.frames_in_flight()));
+
         let scene_meshes = scene.meshes.clone();
         let rt_scene_buffers = Some(scene.create_buffers(vk_ctx.clone()));
         let rt_camera_buffer = Some(rt_camera.into_uniform().create_buffer(vk_ctx.allocator.clone()));
-
-        let render_surface = Some(RenderSurface::new(
-            vk_ctx.clone(),
-            PipelineContext { surface_format: format },
-            swapchain.frames_in_flight() as u32,
-        )?);
 
         let pure_ray_tracer = Some(PureRayTracer::new(
             vk_ctx.clone(),
@@ -228,6 +226,7 @@ impl App {
             frames,
             upload_fence,
             allocator,
+            gui,
             rt_camera,
             rt_push_constants: RtPushConstants {
                 n_triangles: rt_scene_buffers.as_ref().unwrap().n_triangles,
@@ -235,37 +234,41 @@ impl App {
             },
             rt_camera_buffer,
             rt_scene_buffers,
-            render_surface,
             pure_ray_tracer,
             deferred_ray_tracer,
         })
     }
 
-    pub fn resize(&mut self, extent: vk::Extent2D) {
-        let vk_ctx = VulkanContext {
+    fn vulkan_context(&self) -> VulkanContext {
+        VulkanContext {
             allocator:    self.allocator.as_ref().unwrap().clone(),
             device:       self.device.as_ref().unwrap().clone(),
             queue:        self.queue,
             command_pool: self.command_pool,
             upload_fence: self.upload_fence,
-        };
+        }
+    }
+
+    pub fn resize(&mut self, extent: vk::Extent2D) {
+        let vk_ctx = self.vulkan_context();
 
         self.swapchain.update(extent);
         self.rt_camera.img_size = [extent.width, extent.height];
 
         self.rt_camera_buffer.as_mut().unwrap().set_data(&[self.rt_camera.into_uniform()]);
-        self.render_surface.as_mut().unwrap().update_image_size(vk_ctx.clone(), extent);
         self.pure_ray_tracer.as_mut().unwrap().set_output_extent(extent);
-        self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx.clone(), self.rt_camera);
-
-        self.deferred_ray_tracer.as_mut().unwrap().render(
-            vk_ctx,
-            &self.rt_push_constants,
-            &self.render_surface.as_ref().unwrap().render_image,
-        );
+        self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx, self.rt_camera);
     }
 
-    pub fn render(&mut self) {
+    pub fn gui(&mut self, egui_context: &egui::Context) {
+        egui::CentralPanel::default().show(egui_context, |ui| {
+            ui.heading("ErupTrace");
+        });
+    }
+
+    pub fn render(&mut self, textures_delta: &TexturesDelta, clipped_meshes: Vec<ClippedMesh>) {
+        let vk_ctx = self.vulkan_context();
+
         let subresource_range = vk::ImageSubresourceRangeBuilder::new()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
             .base_mip_level(0)
@@ -274,14 +277,13 @@ impl App {
             .layer_count(1)
             .build();
 
-        let acquired_frame = unsafe {
-            self.swapchain.acquire(self.instance.as_ref().unwrap(), self.device.as_ref().unwrap(), u64::MAX).unwrap()
-        };
+        let acquired_frame =
+            unsafe { self.swapchain.acquire(self.instance.as_ref().unwrap(), &vk_ctx.device, u64::MAX).unwrap() };
 
         if acquired_frame.invalidate_images {
             for &image_view in self.swapchain_image_views.iter() {
                 unsafe {
-                    self.device.as_ref().unwrap().destroy_image_view(image_view, None);
+                    vk_ctx.device.destroy_image_view(image_view, None);
                 }
             }
             self.swapchain_image_views = self
@@ -294,14 +296,17 @@ impl App {
                         .view_type(vk::ImageViewType::_2D)
                         .format(self.swapchain.format().format)
                         .subresource_range(subresource_range);
-                    self.device
-                        .as_ref()
-                        .unwrap()
-                        .create_image_view(&create_info, None)
-                        .expect("Cannot create swapchain image view")
+                    vk_ctx.device.create_image_view(&create_info, None).expect("Cannot create swapchain image view")
                 })
                 .collect();
         }
+
+        self.gui.as_mut().unwrap().update_gui_graphics(
+            vk_ctx.clone(),
+            self.swapchain.format(),
+            textures_delta,
+            clipped_meshes,
+        );
 
         let in_flight = &self.frames[acquired_frame.frame_index];
         let swapchain_image = self.swapchain.images()[acquired_frame.image_index];
@@ -312,16 +317,16 @@ impl App {
         unsafe {
             let begin_info =
                 vk::CommandBufferBeginInfoBuilder::new().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-            self.device
-                .as_ref()
-                .unwrap()
+            vk_ctx
+                .device
                 .begin_command_buffer(in_flight.command_buffer, &begin_info)
                 .expect("Cannot begin command buffer");
-            command::set_scissor_and_viewport(self.device.as_ref().unwrap(), in_flight.command_buffer, extent);
-        }
-
-        unsafe {
-            self.device.as_ref().unwrap().cmd_pipeline_barrier2(
+            vk_ctx.device.cmd_set_viewport(in_flight.command_buffer, 0, &[vk::ViewportBuilder::new()
+                .width(extent.width as _)
+                .height(extent.height as _)
+                .min_depth(0.0)
+                .max_depth(1.0)]);
+            vk_ctx.device.cmd_pipeline_barrier2(
                 in_flight.command_buffer,
                 &vk::DependencyInfoBuilder::new().image_memory_barriers(&[vk::ImageMemoryBarrier2Builder::new()
                     .src_stage_mask(vk::PipelineStageFlags2::NONE)
@@ -351,20 +356,21 @@ impl App {
             .render_area(vk::Rect2D { offset: Default::default(), extent });
 
         unsafe {
-            self.device.as_ref().unwrap().cmd_begin_rendering(in_flight.command_buffer, &rendering_info);
+            vk_ctx.device.cmd_begin_rendering(in_flight.command_buffer, &rendering_info);
         }
 
-        self.render_surface.as_mut().unwrap().render(RenderContext {
+        self.gui.as_mut().unwrap().render(RenderContext {
             device:         self.device.as_ref().unwrap(),
             command_buffer: in_flight.command_buffer,
+            screen_extent:  extent,
         });
 
         unsafe {
-            self.device.as_ref().unwrap().cmd_end_rendering(in_flight.command_buffer);
+            vk_ctx.device.cmd_end_rendering(in_flight.command_buffer);
         }
 
         unsafe {
-            self.device.as_ref().unwrap().cmd_pipeline_barrier2(
+            vk_ctx.device.cmd_pipeline_barrier2(
                 in_flight.command_buffer,
                 &vk::DependencyInfoBuilder::new().image_memory_barriers(&[vk::ImageMemoryBarrier2Builder::new()
                     .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT_KHR)
@@ -380,11 +386,7 @@ impl App {
                     .image(swapchain_image)
                     .subresource_range(subresource_range)]),
             );
-            self.device
-                .as_ref()
-                .unwrap()
-                .end_command_buffer(in_flight.command_buffer)
-                .expect("Cannot end command buffer");
+            vk_ctx.device.end_command_buffer(in_flight.command_buffer).expect("Cannot end command buffer");
         }
 
         let wait_semaphore = vk::SemaphoreSubmitInfoBuilder::new()
@@ -399,18 +401,12 @@ impl App {
             .signal_semaphore_infos(std::slice::from_ref(&signal_semaphore))
             .command_buffer_infos(std::slice::from_ref(&command_buffer_info));
         unsafe {
-            self.device
-                .as_ref()
-                .unwrap()
+            vk_ctx
+                .device
                 .queue_submit2(self.queue, &[submit_info], acquired_frame.complete)
                 .expect("Cannot submit commands to queue");
             self.swapchain
-                .queue_present(
-                    self.device.as_ref().unwrap(),
-                    self.queue,
-                    in_flight.complete,
-                    acquired_frame.image_index,
-                )
+                .queue_present(&vk_ctx.device, self.queue, in_flight.complete, acquired_frame.image_index)
                 .expect("Cannot present");
         }
     }
@@ -440,15 +436,14 @@ impl Drop for App {
             drt_ref.destroy(device);
             self.deferred_ray_tracer = None;
 
-            let rsf_ref = self.render_surface.as_ref().unwrap();
-            rsf_ref.destroy(device);
-            self.render_surface = None;
-
             self.rt_scene_buffers.as_ref().unwrap().destroy(device);
             self.rt_scene_buffers = None;
 
             self.rt_camera_buffer.as_ref().unwrap().destroy();
             self.rt_camera_buffer = None;
+
+            self.gui.as_mut().unwrap().destroy(device);
+            self.gui = None;
 
             device.destroy_command_pool(self.command_pool, None);
 

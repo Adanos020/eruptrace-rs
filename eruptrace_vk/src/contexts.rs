@@ -13,11 +13,6 @@ pub struct VulkanContext {
 }
 
 #[derive(Copy, Clone)]
-pub struct PipelineContext {
-    pub surface_format: vk::SurfaceFormatKHR,
-}
-
-#[derive(Copy, Clone)]
 pub struct FrameContext {
     pub command_buffer: vk::CommandBuffer,
     pub complete:       vk::Semaphore,
@@ -27,4 +22,5 @@ pub struct FrameContext {
 pub struct RenderContext<'a> {
     pub device:         &'a DeviceLoader,
     pub command_buffer: vk::CommandBuffer,
+    pub screen_extent:  vk::Extent2D,
 }

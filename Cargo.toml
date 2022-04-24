@@ -25,6 +25,9 @@ erupt = "0.22"
 erupt-bootstrap = "0.2.3"
 vk-mem-erupt = { git = "https://github.com/HindrikStegenga/vk-mem-erupt" }
 
+egui = "0.17"
+egui-winit = "0.17"
+
 anyhow = "1.0"
 itertools = "0.10"
 nalgebra-glm = "0.16"

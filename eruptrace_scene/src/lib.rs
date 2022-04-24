@@ -1,5 +1,4 @@
 #![feature(iter_partition_in_place)]
-#![feature(total_cmp)]
 #![allow(clippy::no_effect)]
 
 pub mod bih;
@@ -173,6 +172,7 @@ impl Scene {
         RtSceneBuffers {
             textures_image: AllocatedImage::texture_with_data(
                 vk_ctx.clone(),
+                vk::Format::R8G8B8A8_UNORM,
                 image_extent,
                 vk::ImageViewType::_2D_ARRAY,
                 1,
@@ -181,6 +181,7 @@ impl Scene {
             ),
             normal_maps_image: AllocatedImage::texture_with_data(
                 vk_ctx.clone(),
+                vk::Format::R8G8B8A8_UNORM,
                 image_extent,
                 vk::ImageViewType::_2D_ARRAY,
                 1,

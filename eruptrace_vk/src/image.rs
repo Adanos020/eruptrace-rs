@@ -121,16 +121,16 @@ impl AllocatedImage {
         Self::new(vk_ctx, image_info, Some(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL), view_type, range)
     }
 
-    pub fn texture_with_data(
+    pub fn texture_with_data<T>(
         vk_ctx: VulkanContext,
+        format: vk::Format,
         extent: vk::Extent3D,
         view_type: vk::ImageViewType,
         mip_levels: u32,
         array_layers: u32,
-        texture_data: &[u8],
+        texture_data: &[T],
     ) -> Self {
-        let this =
-            Self::texture(vk_ctx.clone(), vk::Format::R8G8B8A8_UNORM, extent, view_type, mip_levels, array_layers);
+        let this = Self::texture(vk_ctx.clone(), format, extent, view_type, mip_levels, array_layers);
         this.set_data(vk_ctx.clone(), texture_data);
         vk_ctx.allocator.read().unwrap().flush_allocation(&this.allocation, 0, texture_data.len());
         this
@@ -230,14 +230,64 @@ impl AllocatedImage {
         self.allocator.read().unwrap().destroy_image(self.image, &self.allocation);
     }
 
-    fn set_data<T>(&self, vk_ctx: VulkanContext, data: &[T]) {
+    pub fn update_data<T>(&self, vk_ctx: VulkanContext, start: usize, data: &[T]) {
+        let image_buffer = {
+            let buffer_info = vk::BufferCreateInfoBuilder::new()
+                .usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::TRANSFER_SRC)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE);
+            AllocatedBuffer::<T>::new(self.allocator.clone(), &buffer_info, vma::MemoryUsage::CpuOnly)
+        };
+
+        command::immediate_submit(vk_ctx.clone(), |device, command_buffer| unsafe {
+            device.cmd_pipeline_barrier2(
+                command_buffer,
+                &vk::DependencyInfoBuilder::new().image_memory_barriers(&[vk::ImageMemoryBarrier2Builder::new()
+                    .src_stage_mask(vk::PipelineStageFlags2::TOP_OF_PIPE)
+                    .dst_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+                    .src_access_mask(vk::AccessFlags2::empty())
+                    .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
+                    .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    .image(self.image)
+                    .subresource_range(self.subresource_range)]),
+            );
+            device.cmd_copy_image_to_buffer2(
+                command_buffer,
+                &vk::CopyImageToBufferInfo2Builder::new()
+                    .src_image(self.image)
+                    .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    .dst_buffer(image_buffer.buffer)
+                    .regions(&[vk::BufferImageCopy2Builder::new()
+                        .buffer_offset(0)
+                        .buffer_row_length(0)
+                        .buffer_image_height(0)
+                        .image_subresource(
+                            vk::ImageSubresourceLayersBuilder::new()
+                                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                .mip_level(0)
+                                .base_array_layer(0)
+                                .layer_count(self.array_layers)
+                                .build(),
+                        )
+                        .image_extent(self.extent)]),
+            );
+        });
+
+        image_buffer.set_data_at(start, data);
+        self.upload_data(vk_ctx, image_buffer);
+    }
+
+    pub fn set_data<T>(&self, vk_ctx: VulkanContext, data: &[T]) {
         let image_buffer = {
             let buffer_info = vk::BufferCreateInfoBuilder::new()
                 .usage(vk::BufferUsageFlags::TRANSFER_SRC)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
             AllocatedBuffer::with_data(self.allocator.clone(), &buffer_info, vma::MemoryUsage::CpuOnly, data)
         };
+        self.upload_data(vk_ctx, image_buffer);
+    }
 
+    fn upload_data<T>(&self, vk_ctx: VulkanContext, image_buffer: AllocatedBuffer<T>) {
         command::immediate_submit(vk_ctx, |device, command_buffer| unsafe {
             device.cmd_pipeline_barrier2(
                 command_buffer,

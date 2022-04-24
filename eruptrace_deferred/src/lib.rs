@@ -38,11 +38,7 @@ impl DeferredRayTracer {
 
     pub fn update_output(&mut self, vk_ctx: VulkanContext, camera: Camera) {
         self.geometry_pass.update_camera(vk_ctx.clone(), camera);
-        self.lighting_pass.update_output(
-            &vk_ctx.device,
-            camera.image_extent_2d(),
-            &self.geometry_pass.gbuffers,
-        );
+        self.lighting_pass.update_output(&vk_ctx.device, camera.image_extent_2d(), &self.geometry_pass.gbuffers);
     }
 
     pub fn render(&self, vk_ctx: VulkanContext, push_constants: &RtPushConstants, target: &AllocatedImage) {

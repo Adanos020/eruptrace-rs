@@ -10,5 +10,5 @@ glslc $SHADERS_DEFERRED/lighting.frag -o $SHADERS_DEFERRED/lighting_frag.spv -I.
 glslc $SHADERS_PURE/image.vert -o $SHADERS_PURE/image_vert.spv
 glslc $SHADERS_PURE/image.frag -o $SHADERS_PURE/image_frag.spv -I./glsl_include/
 
-glslc $SHADERS_RENDER_SURFACE/surface.vert -o $SHADERS_RENDER_SURFACE/surface_vert.spv
-glslc $SHADERS_RENDER_SURFACE/surface.frag -o $SHADERS_RENDER_SURFACE/surface_frag.spv
+glslc $SHADERS_RENDER_SURFACE/gui_mesh.vert -o $SHADERS_RENDER_SURFACE/gui_mesh_vert.spv
+glslc $SHADERS_RENDER_SURFACE/gui_mesh.frag -o $SHADERS_RENDER_SURFACE/gui_mesh_frag.spv

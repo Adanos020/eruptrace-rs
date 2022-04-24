@@ -31,9 +31,12 @@ fn main() {
             let event_loop = EventLoop::new();
             let window = WindowBuilder::new().with_title("ErupTrace").build(&event_loop).expect("Cannot create window");
             let mut app = App::new(&window, camera, scene).unwrap();
+            let mut egui_winit_state = egui_winit::State::new(4096, &window);
+            let egui_context = egui::Context::default();
 
             event_loop.run(move |event, _, control_flow| {
                 *control_flow = ControlFlow::Poll;
+                let new_input = egui_winit_state.take_egui_input(&window);
                 match event {
                     Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                         *control_flow = ControlFlow::Exit;
@@ -43,7 +46,10 @@ fn main() {
                         app.resize(vk::Extent2D { width, height })
                     }
                     Event::MainEventsCleared => {
-                        app.render();
+                        let full_output = egui_context.run(new_input, |egui_context| app.gui(egui_context));
+                        let clipped_meshes = egui_context.tessellate(full_output.shapes);
+                        app.render(&full_output.textures_delta, clipped_meshes);
+                        egui_winit_state.handle_platform_output(&window, &egui_context, full_output.platform_output);
                     }
                     _ => {}
                 }
