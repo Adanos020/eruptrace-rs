@@ -18,11 +18,13 @@ use crate::gui::mesh::Mesh;
 
 #[derive(Clone)]
 pub struct Gui {
-    textures: AHashMap<TextureId, AllocatedImage>,
     vertices: AllocatedBuffer<Vertex>,
     indices:  AllocatedBuffer<u32>,
     meshes:   Vec<Mesh>,
+    textures: AHashMap<TextureId, AllocatedImage>,
 
+    vertices_to_destroy: Vec<(usize, AllocatedBuffer<Vertex>)>,
+    indices_to_destroy:  Vec<(usize, AllocatedBuffer<u32>)>,
     meshes_to_destroy:   Vec<(usize, Mesh)>,
     textures_to_destroy: Vec<(usize, AllocatedImage)>,
     frames_in_flight:    usize,
@@ -37,7 +39,6 @@ struct GuiPushConstants {
 impl Gui {
     pub fn new(vk_ctx: VulkanContext, frames_in_flight: usize) -> Self {
         Self {
-            textures: AHashMap::new(),
             vertices: AllocatedBuffer::new(
                 vk_ctx.allocator.clone(),
                 &vk::BufferCreateInfoBuilder::new()
@@ -55,6 +56,9 @@ impl Gui {
                 vma::MemoryUsage::CpuToGpu,
             ),
             meshes: vec![],
+            textures: AHashMap::new(),
+            vertices_to_destroy: vec![],
+            indices_to_destroy: vec![],
             meshes_to_destroy: vec![],
             textures_to_destroy: vec![],
             frames_in_flight,
@@ -62,13 +66,19 @@ impl Gui {
     }
 
     pub fn destroy(&mut self, device: &DeviceLoader) {
-        for (_, image) in self.textures.drain() {
-            image.destroy(device);
-        }
         self.vertices.destroy();
         self.indices.destroy();
         for mesh in self.meshes.drain(..) {
             mesh.graphics_pipeline.destroy(device);
+        }
+        for (_, image) in self.textures.drain() {
+            image.destroy(device);
+        }
+        for (_, vertex_buffer) in self.vertices_to_destroy.drain(..) {
+            vertex_buffer.destroy();
+        }
+        for (_, index) in self.indices_to_destroy.drain(..) {
+            index.destroy();
         }
         for (_, mesh) in self.meshes_to_destroy.drain(..) {
             mesh.graphics_pipeline.destroy(device);
@@ -163,8 +173,7 @@ impl Gui {
         let index_buf_size = (indices.len() * std::mem::size_of::<u32>()) as vk::DeviceSize;
 
         if vertex_buf_size > self.vertices.size {
-            self.vertices.destroy();
-            self.vertices = AllocatedBuffer::new(
+            let new_vertices = AllocatedBuffer::new(
                 vk_ctx.allocator.clone(),
                 &vk::BufferCreateInfoBuilder::new()
                     .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
@@ -172,10 +181,10 @@ impl Gui {
                     .size(vertex_buf_size),
                 vma::MemoryUsage::CpuToGpu,
             );
+            self.vertices_to_destroy.push((self.frames_in_flight, std::mem::replace(&mut self.vertices, new_vertices)));
         }
         if index_buf_size > self.indices.size {
-            self.indices.destroy();
-            self.indices = AllocatedBuffer::new(
+            let new_indices = AllocatedBuffer::new(
                 vk_ctx.allocator,
                 &vk::BufferCreateInfoBuilder::new()
                     .usage(vk::BufferUsageFlags::INDEX_BUFFER)
@@ -183,35 +192,37 @@ impl Gui {
                     .size(index_buf_size),
                 vma::MemoryUsage::CpuToGpu,
             );
+            self.indices_to_destroy.push((self.frames_in_flight, std::mem::replace(&mut self.indices, new_indices)));
         }
 
         self.vertices.set_data(&vertices);
         self.indices.set_data(&indices);
     }
 
+    fn spin_cleanups(&mut self, device: &DeviceLoader) {
+        fn spin<T, D>(deletables: &mut Vec<(usize, T)>, destroy_fn: D)
+        where D: Fn(&T) {
+            *deletables = std::mem::take(deletables)
+                .into_iter()
+                .filter_map(|(lifetime, deletable)| {
+                    if lifetime == 0 {
+                        destroy_fn(&deletable);
+                        None
+                    } else {
+                        Some((lifetime - 1, deletable))
+                    }
+                })
+                .collect();
+        }
+
+        spin(&mut self.vertices_to_destroy, AllocatedBuffer::destroy);
+        spin(&mut self.indices_to_destroy, AllocatedBuffer::destroy);
+        spin(&mut self.meshes_to_destroy, |mesh| mesh.graphics_pipeline.destroy(device));
+        spin(&mut self.textures_to_destroy, |texture| texture.destroy(device));
+    }
+
     pub fn render(&mut self, ctx: RenderContext) {
-        self.meshes_to_destroy = std::mem::take(&mut self.meshes_to_destroy)
-            .into_iter()
-            .filter_map(|(lifetime, mesh)| {
-                if lifetime == 0 {
-                    mesh.graphics_pipeline.destroy(ctx.device);
-                    None
-                } else {
-                    Some((lifetime - 1, mesh))
-                }
-            })
-            .collect();
-        self.textures_to_destroy = std::mem::take(&mut self.textures_to_destroy)
-            .into_iter()
-            .filter_map(|(lifetime, image)| {
-                if lifetime == 0 {
-                    image.destroy(ctx.device);
-                    None
-                } else {
-                    Some((lifetime - 1, image))
-                }
-            })
-            .collect();
+        self.spin_cleanups(ctx.device);
 
         let RenderContext { device, command_buffer, screen_extent } = ctx;
         let push_constants =

@@ -261,7 +261,7 @@ impl App {
     }
 
     pub fn gui(&mut self, egui_context: &egui::Context) {
-        egui::CentralPanel::default().show(egui_context, |ui| {
+        egui::Window::new("ErupTrace").show(egui_context, |ui| {
             ui.heading("ErupTrace");
         });
     }

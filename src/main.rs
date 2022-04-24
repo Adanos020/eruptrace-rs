@@ -38,12 +38,18 @@ fn main() {
                 *control_flow = ControlFlow::Poll;
                 let new_input = egui_winit_state.take_egui_input(&window);
                 match event {
-                    Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
-                        *control_flow = ControlFlow::Exit;
-                    }
-                    Event::WindowEvent { event: WindowEvent::Resized(size), .. } => {
-                        let [width, height]: [u32; 2] = size.into();
-                        app.resize(vk::Extent2D { width, height })
+                    Event::WindowEvent { event, .. } => {
+                        egui_winit_state.on_event(&egui_context, &event);
+                        match event {
+                            WindowEvent::CloseRequested => {
+                                *control_flow = ControlFlow::Exit;
+                            }
+                            WindowEvent::Resized(size) => {
+                                let [width, height]: [u32; 2] = size.into();
+                                app.resize(vk::Extent2D { width, height })
+                            }
+                            _ => (),
+                        }
                     }
                     Event::MainEventsCleared => {
                         let full_output = egui_context.run(new_input, |egui_context| app.gui(egui_context));
