@@ -201,7 +201,9 @@ impl Gui {
 
     fn spin_cleanups(&mut self, device: &DeviceLoader) {
         fn spin<T, D>(deletables: &mut Vec<(usize, T)>, destroy_fn: D)
-        where D: Fn(&T) {
+        where
+            D: Fn(&T),
+        {
             *deletables = std::mem::take(deletables)
                 .into_iter()
                 .filter_map(|(lifetime, deletable)| {
