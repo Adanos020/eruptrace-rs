@@ -28,6 +28,7 @@ pub struct GraphicsPipelineCreateInfo<'a> {
     pub vertex_shader:           &'static [u8],
     pub fragment_shader:         &'static [u8],
     pub color_attachment_infos:  Vec<ColorAttachmentInfo>,
+    pub colour_blending_info:    vk::PipelineColorBlendStateCreateInfoBuilder<'a>,
     pub push_constant_ranges:    Vec<vk::PushConstantRangeBuilder<'a>>,
     pub input_assembly:          vk::PipelineInputAssemblyStateCreateInfoBuilder<'a>,
     pub vertex_input_bindings:   Vec<vk::VertexInputBindingDescriptionBuilder<'a>>,
@@ -62,6 +63,7 @@ pub struct DescriptorBindingCreateInfo<'a> {
 pub struct ColorAttachmentInfo {
     pub format:           vk::Format,
     pub color_write_mask: vk::ColorComponentFlags,
+    pub blend_enable:     bool,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -191,12 +193,10 @@ impl Pipeline {
             .map(|info| {
                 vk::PipelineColorBlendAttachmentStateBuilder::new()
                     .color_write_mask(info.color_write_mask)
-                    .blend_enable(false)
+                    .blend_enable(info.blend_enable)
             })
             .collect_vec();
-        let colour_blending_info = vk::PipelineColorBlendStateCreateInfoBuilder::new()
-            .logic_op_enable(false)
-            .attachments(&colour_blend_attachments);
+        let colour_blending_info = create_info.colour_blending_info.attachments(&colour_blend_attachments);
 
         let vertex_input = vk::PipelineVertexInputStateCreateInfoBuilder::new()
             .vertex_binding_descriptions(&create_info.vertex_input_bindings)

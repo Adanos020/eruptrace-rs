@@ -14,7 +14,7 @@ use eruptrace_vk::{
 };
 
 use crate::{
-    gui::GuiPushConstants,
+    gui::integration::GuiPushConstants,
     shaders::{GUI_MESH_FRAGMENT_SHADER, GUI_MESH_VERTEX_SHADER},
 };
 
@@ -45,7 +45,11 @@ impl Mesh {
             color_attachment_infos:  vec![ColorAttachmentInfo {
                 format:           surface_format.format,
                 color_write_mask: vk::ColorComponentFlags::all(),
+                blend_enable:     true,
             }],
+            colour_blending_info: vk::PipelineColorBlendStateCreateInfoBuilder::new()
+                .logic_op_enable(true)
+                .logic_op(vk::LogicOp::OR),
             push_constant_ranges:    vec![vk::PushConstantRangeBuilder::new()
                 .stage_flags(vk::ShaderStageFlags::VERTEX)
                 .offset(0)

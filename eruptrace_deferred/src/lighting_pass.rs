@@ -67,7 +67,9 @@ impl LightingPass {
             color_attachment_infos:  vec![ColorAttachmentInfo {
                 format:           vk::Format::R8G8B8A8_UNORM,
                 color_write_mask: vk::ColorComponentFlags::all(),
+                blend_enable:     false,
             }],
+            colour_blending_info: vk::PipelineColorBlendStateCreateInfoBuilder::new().logic_op_enable(false),
             push_constant_ranges:    vec![vk::PushConstantRangeBuilder::new()
                 .offset(0)
                 .size(std::mem::size_of::<RtPushConstants>() as u32)

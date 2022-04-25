@@ -1,4 +1,4 @@
-mod gui;
+pub mod gui;
 mod shaders;
 
 use std::sync::{Arc, RwLock};
@@ -10,16 +10,22 @@ use eruptrace_deferred::DeferredRayTracer;
 use eruptrace_pure::PureRayTracer;
 use eruptrace_scene::{camera::Camera, CameraUniform, RtSceneBuffers, Scene};
 use eruptrace_vk::{
-    command,
     contexts::{FrameContext, RenderContext, VulkanContext},
     debug::debug_callback,
     push_constants::{RtFlags, RtPushConstants},
     AllocatedBuffer,
+    AllocatedImage,
 };
 use vk_mem_erupt as vma;
 use winit::window::Window;
 
-use crate::gui::Gui;
+use crate::gui::GuiIntegration;
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum RendererChoice {
+    Pure,
+    Deferred,
+}
 
 pub struct App {
     _entry:                EntryLoader,
@@ -36,12 +42,16 @@ pub struct App {
     upload_fence:          vk::Fence,
     allocator:             Option<Arc<RwLock<vma::Allocator>>>,
 
-    gui: Option<Gui>,
+    gui_integration: Option<GuiIntegration>,
+    renderer_choice: RendererChoice,
+    use_bih:         bool,
+    render_normals:  bool,
 
     rt_camera:         Camera,
     rt_camera_buffer:  Option<AllocatedBuffer<CameraUniform>>,
     rt_scene_buffers:  Option<RtSceneBuffers>,
     rt_push_constants: RtPushConstants,
+    rt_render_image:   Option<AllocatedImage>,
 
     pure_ray_tracer:     Option<PureRayTracer>,
     deferred_ray_tracer: Option<DeferredRayTracer>,
@@ -73,7 +83,9 @@ impl App {
             let graphics_present = vkb::QueueFamilyCriteria::graphics_present();
             let mut vulkan_1_3_features =
                 vk::PhysicalDeviceVulkan13FeaturesBuilder::new().dynamic_rendering(true).synchronization2(true);
-            let device_features = vk::PhysicalDeviceFeatures2Builder::new().extend_from(&mut vulkan_1_3_features);
+            let device_features = vk::PhysicalDeviceFeatures2Builder::new()
+                .extend_from(&mut vulkan_1_3_features)
+                .features(vk::PhysicalDeviceFeaturesBuilder::new().logic_op(true).build());
             let device_builder = vkb::DeviceBuilder::new()
                 .require_version(1, 3)
                 .require_extension(vk::KHR_SWAPCHAIN_EXTENSION_NAME)
@@ -191,11 +203,42 @@ impl App {
             upload_fence,
         };
 
-        let gui = Some(Gui::new(vk_ctx.clone(), swapchain.frames_in_flight()));
+        let gui = Some(GuiIntegration::new(vk_ctx.clone(), swapchain.frames_in_flight()));
 
         let scene_meshes = scene.meshes.clone();
         let rt_scene_buffers = Some(scene.create_buffers(vk_ctx.clone()));
         let rt_camera_buffer = Some(rt_camera.into_uniform().create_buffer(vk_ctx.allocator.clone()));
+        let rt_render_image = {
+            let image_info = vk::ImageCreateInfoBuilder::new()
+                .usage(
+                    vk::ImageUsageFlags::COLOR_ATTACHMENT
+                        | vk::ImageUsageFlags::TRANSFER_DST
+                        | vk::ImageUsageFlags::SAMPLED,
+                )
+                .format(vk::Format::R8G8B8A8_UNORM)
+                .extent(vk::Extent3D { width: 512, height: 512, depth: 1 })
+                .mip_levels(1)
+                .array_layers(1)
+                .samples(vk::SampleCountFlagBits::_1)
+                .image_type(vk::ImageType::_2D);
+
+            let range = vk::ImageSubresourceRangeBuilder::new()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .base_array_layer(0)
+                .level_count(1)
+                .layer_count(1)
+                .build();
+
+            let image = AllocatedImage::with_data(
+                vk_ctx.clone(),
+                image_info,
+                vk::ImageViewType::_2D,
+                range,
+                &[0u8; 4 * 512 * 512],
+            );
+            Some(image)
+        };
 
         let pure_ray_tracer = Some(PureRayTracer::new(
             vk_ctx.clone(),
@@ -226,7 +269,10 @@ impl App {
             frames,
             upload_fence,
             allocator,
-            gui,
+            gui_integration: gui,
+            renderer_choice: RendererChoice::Pure,
+            use_bih: false,
+            render_normals: false,
             rt_camera,
             rt_push_constants: RtPushConstants {
                 n_triangles: rt_scene_buffers.as_ref().unwrap().n_triangles,
@@ -234,6 +280,7 @@ impl App {
             },
             rt_camera_buffer,
             rt_scene_buffers,
+            rt_render_image,
             pure_ray_tracer,
             deferred_ray_tracer,
         })
@@ -250,19 +297,52 @@ impl App {
     }
 
     pub fn resize(&mut self, extent: vk::Extent2D) {
-        let vk_ctx = self.vulkan_context();
-
         self.swapchain.update(extent);
-        self.rt_camera.img_size = [extent.width, extent.height];
 
-        self.rt_camera_buffer.as_mut().unwrap().set_data(&[self.rt_camera.into_uniform()]);
-        self.pure_ray_tracer.as_mut().unwrap().set_output_extent(extent);
-        self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx, self.rt_camera);
+        // TODO trigger this via GUI
+        // let vk_ctx = self.vulkan_context();
+        // self.rt_camera.img_size = [extent.width, extent.height];
+        // self.rt_camera_buffer.as_mut().unwrap().set_data(&[self.rt_camera.into_uniform()]);
+        // self.pure_ray_tracer.as_mut().unwrap().set_output_extent(extent);
+        // self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx, self.rt_camera);
     }
 
-    pub fn gui(&mut self, egui_context: &egui::Context) {
-        egui::Window::new("ErupTrace").show(egui_context, |ui| {
-            ui.heading("ErupTrace");
+    pub fn gui(&mut self, ctx: &egui::Context) {
+        let vk_ctx = self.vulkan_context();
+
+        egui::Window::new("Settings").resizable(false).collapsible(false).show(ctx, |ui| {
+            ui.radio_value(&mut self.renderer_choice, RendererChoice::Pure, "Pure ray tracing");
+            ui.radio_value(&mut self.renderer_choice, RendererChoice::Deferred, "Deferred ray tracing");
+
+            if ui.checkbox(&mut self.use_bih, "Use BIH").clicked() {
+                self.rt_push_constants.flags.set(RtFlags::USE_BIH, self.use_bih);
+            }
+            if ui.checkbox(&mut self.render_normals, "Render normals").clicked() {
+                self.rt_push_constants.flags.set(RtFlags::RENDER_NORMALS, self.render_normals);
+            }
+
+            if ui.button("Render").clicked() {
+                match self.renderer_choice {
+                    RendererChoice::Pure => {
+                        self.pure_ray_tracer.as_mut().unwrap().render(
+                            vk_ctx,
+                            &self.rt_push_constants,
+                            &self.rt_render_image.as_ref().unwrap(),
+                        );
+                    }
+                    RendererChoice::Deferred => {
+                        self.deferred_ray_tracer.as_mut().unwrap().render(
+                            vk_ctx,
+                            &self.rt_push_constants,
+                            &self.rt_render_image.as_ref().unwrap(),
+                        );
+                    }
+                }
+            }
+        });
+
+        egui::Window::new("Image").resizable(false).collapsible(false).show(ctx, |ui| {
+            ui.heading("Image");
         });
     }
 
@@ -301,7 +381,7 @@ impl App {
                 .collect();
         }
 
-        self.gui.as_mut().unwrap().update_gui_graphics(
+        self.gui_integration.as_mut().unwrap().update_gui_graphics(
             vk_ctx.clone(),
             self.swapchain.format(),
             textures_delta,
@@ -359,7 +439,7 @@ impl App {
             vk_ctx.device.cmd_begin_rendering(in_flight.command_buffer, &rendering_info);
         }
 
-        self.gui.as_mut().unwrap().render(RenderContext {
+        self.gui_integration.as_mut().unwrap().render(RenderContext {
             device:         self.device.as_ref().unwrap(),
             command_buffer: in_flight.command_buffer,
             screen_extent:  extent,
@@ -436,14 +516,17 @@ impl Drop for App {
             drt_ref.destroy(device);
             self.deferred_ray_tracer = None;
 
+            self.rt_render_image.as_ref().unwrap().destroy(device);
+            self.rt_render_image = None;
+
             self.rt_scene_buffers.as_ref().unwrap().destroy(device);
             self.rt_scene_buffers = None;
 
             self.rt_camera_buffer.as_ref().unwrap().destroy();
             self.rt_camera_buffer = None;
 
-            self.gui.as_mut().unwrap().destroy(device);
-            self.gui = None;
+            self.gui_integration.as_mut().unwrap().destroy(device);
+            self.gui_integration = None;
 
             device.destroy_command_pool(self.command_pool, None);
 

@@ -189,18 +189,22 @@ impl GeometryPass {
                 ColorAttachmentInfo {
                     format:           vk::Format::R32G32B32A32_SFLOAT,
                     color_write_mask: vk::ColorComponentFlags::all(),
+                    blend_enable:     false,
                 },
                 // normals
                 ColorAttachmentInfo {
                     format:           vk::Format::R32G32B32A32_SFLOAT,
                     color_write_mask: vk::ColorComponentFlags::all(),
+                    blend_enable:     false,
                 },
                 // materials
                 ColorAttachmentInfo {
                     format:           vk::Format::R32G32B32A32_SFLOAT,
                     color_write_mask: vk::ColorComponentFlags::all(),
+                    blend_enable:     false,
                 },
             ],
+            colour_blending_info: vk::PipelineColorBlendStateCreateInfoBuilder::new().logic_op_enable(false),
             push_constant_ranges:    vec![vk::PushConstantRangeBuilder::new()
                 .offset(0)
                 .size(std::mem::size_of::<PushConstants>() as u32)
