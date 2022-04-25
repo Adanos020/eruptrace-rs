@@ -8,8 +8,8 @@ use egui::{
     TexturesDelta,
 };
 use erupt::{vk, DeviceLoader};
-use itertools::Itertools;
 use eruptrace_vk::{contexts::RenderContext, AllocatedBuffer, AllocatedImage, VulkanContext};
+use itertools::Itertools;
 use nalgebra_glm as glm;
 use vk_mem_erupt as vma;
 
@@ -105,7 +105,7 @@ impl GuiIntegration {
                     ImageData::Alpha(a_image) => {
                         let texture_data = a_image.pixels.iter().flat_map(|&a| vec![a, a, a, a]).collect_vec();
                         image.set_data(vk_ctx.clone(), image_offset, &texture_data)
-                    },
+                    }
                     ImageData::Color(c_image) => image.set_data(vk_ctx.clone(), image_offset, &c_image.pixels),
                 }
             } else {
@@ -122,7 +122,7 @@ impl GuiIntegration {
                             1,
                             &texture_data,
                         )
-                    },
+                    }
                     ImageData::Color(c_image) => AllocatedImage::texture_with_data(
                         vk_ctx.clone(),
                         vk::Format::R8G8B8A8_UNORM,

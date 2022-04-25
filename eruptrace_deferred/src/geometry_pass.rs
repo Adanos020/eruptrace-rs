@@ -204,7 +204,7 @@ impl GeometryPass {
                     blend_enable:     false,
                 },
             ],
-            colour_blending_info: vk::PipelineColorBlendStateCreateInfoBuilder::new().logic_op_enable(false),
+            colour_blending_info:    vk::PipelineColorBlendStateCreateInfoBuilder::new().logic_op_enable(false),
             push_constant_ranges:    vec![vk::PushConstantRangeBuilder::new()
                 .offset(0)
                 .size(std::mem::size_of::<PushConstants>() as u32)

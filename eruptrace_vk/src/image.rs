@@ -288,4 +288,41 @@ impl AllocatedImage {
 
         image_buffer.destroy();
     }
+
+    pub fn copy_to_buffer<T>(&self, vk_ctx: VulkanContext, buffer: &AllocatedBuffer<T>) {
+        command::immediate_submit(vk_ctx, |device, command_buffer| unsafe {
+            device.cmd_pipeline_barrier2(
+                command_buffer,
+                &vk::DependencyInfoBuilder::new().image_memory_barriers(&[vk::ImageMemoryBarrier2Builder::new()
+                    .src_stage_mask(vk::PipelineStageFlags2::TOP_OF_PIPE)
+                    .dst_stage_mask(vk::PipelineStageFlags2::TRANSFER)
+                    .src_access_mask(vk::AccessFlags2::empty())
+                    .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
+                    .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    .image(self.image)
+                    .subresource_range(self.subresource_range)]),
+            );
+            device.cmd_copy_image_to_buffer2(
+                command_buffer,
+                &vk::CopyImageToBufferInfo2Builder::new()
+                    .src_image(self.image)
+                    .src_image_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    .dst_buffer(buffer.buffer)
+                    .regions(&[vk::BufferImageCopy2Builder::new()
+                        .buffer_offset(0)
+                        .buffer_row_length(0)
+                        .buffer_image_height(0)
+                        .image_subresource(
+                            vk::ImageSubresourceLayersBuilder::new()
+                                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                                .mip_level(0)
+                                .base_array_layer(0)
+                                .layer_count(self.array_layers)
+                                .build(),
+                        )
+                        .image_extent(self.extent)]),
+            );
+        });
+    }
 }

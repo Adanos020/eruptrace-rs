@@ -47,7 +47,7 @@ impl Mesh {
                 color_write_mask: vk::ColorComponentFlags::all(),
                 blend_enable:     true,
             }],
-            colour_blending_info: vk::PipelineColorBlendStateCreateInfoBuilder::new()
+            colour_blending_info:    vk::PipelineColorBlendStateCreateInfoBuilder::new()
                 .logic_op_enable(true)
                 .logic_op(vk::LogicOp::OR),
             push_constant_ranges:    vec![vk::PushConstantRangeBuilder::new()

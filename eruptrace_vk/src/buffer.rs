@@ -44,6 +44,10 @@ impl<T: Sized> AllocatedBuffer<T> {
         buf
     }
 
+    pub fn memory_ptr(&self) -> *mut u8 {
+        self.allocator.read().unwrap().map_memory(&self.allocation).expect("Cannot map allocated memory")
+    }
+
     pub fn set_data(&self, data: &[T]) {
         self.set_data_at(0, data);
     }
@@ -51,8 +55,7 @@ impl<T: Sized> AllocatedBuffer<T> {
     pub fn set_data_at(&self, start: usize, data: &[T]) {
         let data_size = std::mem::size_of::<T>() * data.len();
         assert!(start + data_size <= self.allocation_info.get_size());
-        let buffer_addr =
-            self.allocator.read().unwrap().map_memory(&self.allocation).expect("Cannot map allocated memory");
+        let buffer_addr = self.memory_ptr();
         assert_ne!(buffer_addr, std::ptr::null_mut());
         unsafe {
             let bytes = std::slice::from_raw_parts(data.as_ptr() as *const u8, data_size);

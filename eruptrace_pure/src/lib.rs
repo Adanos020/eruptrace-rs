@@ -69,7 +69,7 @@ impl PureRayTracer {
                 color_write_mask: vk::ColorComponentFlags::all(),
                 blend_enable:     false,
             }],
-            colour_blending_info: vk::PipelineColorBlendStateCreateInfoBuilder::new().logic_op_enable(false),
+            colour_blending_info:    vk::PipelineColorBlendStateCreateInfoBuilder::new().logic_op_enable(false),
             push_constant_ranges:    vec![vk::PushConstantRangeBuilder::new()
                 .offset(0)
                 .size(std::mem::size_of::<RtPushConstants>() as u32)
@@ -165,7 +165,7 @@ impl PureRayTracer {
             device.cmd_pipeline_barrier2(
                 command_buffer,
                 &vk::DependencyInfoBuilder::new().image_memory_barriers(&[vk::ImageMemoryBarrier2Builder::new()
-                    .src_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                    .src_stage_mask(vk::PipelineStageFlags2::NONE)
                     .dst_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
                     .src_access_mask(vk::AccessFlags2::NONE)
                     .dst_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE)
@@ -213,11 +213,11 @@ impl PureRayTracer {
                 command_buffer,
                 &vk::DependencyInfoBuilder::new().image_memory_barriers(&[vk::ImageMemoryBarrier2Builder::new()
                     .src_stage_mask(vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)
-                    .dst_stage_mask(vk::PipelineStageFlags2::FRAGMENT_SHADER)
+                    .dst_stage_mask(vk::PipelineStageFlags2::COPY)
                     .src_access_mask(vk::AccessFlags2::COLOR_ATTACHMENT_WRITE_KHR)
-                    .dst_access_mask(vk::AccessFlags2::SHADER_SAMPLED_READ)
+                    .dst_access_mask(vk::AccessFlags2::TRANSFER_READ)
                     .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                     .image(target.image)
                     .subresource_range(target.subresource_range)]),
             );
