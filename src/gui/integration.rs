@@ -97,16 +97,16 @@ impl GuiIntegration {
         for (id, image_delta) in textures_delta.set.iter() {
             if self.textures.contains_key(id) {
                 let image = &self.textures[id];
-                let start = match image_delta.pos {
-                    Some([x, y]) => x + (y * image.extent.height as usize),
-                    None => 0,
+                let image_offset = match image_delta.pos {
+                    Some([x, y]) => vk::Offset3D { x: x as i32, y: y as i32, z: 0 },
+                    None => vk::Offset3D::default(),
                 };
                 match image_delta.image.borrow() {
                     ImageData::Alpha(a_image) => {
                         let texture_data = a_image.pixels.iter().flat_map(|&a| vec![a, a, a, a]).collect_vec();
-                        image.update_data(vk_ctx.clone(), start, &texture_data)
+                        image.set_data(vk_ctx.clone(), image_offset, &texture_data)
                     },
-                    ImageData::Color(c_image) => image.update_data(vk_ctx.clone(), start, &c_image.pixels),
+                    ImageData::Color(c_image) => image.set_data(vk_ctx.clone(), image_offset, &c_image.pixels),
                 }
             } else {
                 assert!(image_delta.pos.is_none());

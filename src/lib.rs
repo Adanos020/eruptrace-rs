@@ -19,7 +19,7 @@ use eruptrace_vk::{
 use vk_mem_erupt as vma;
 use winit::window::Window;
 
-use crate::gui::GuiIntegration;
+use crate::gui::{GuiIntegration, widgets};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum RendererChoice {
@@ -42,10 +42,10 @@ pub struct App {
     upload_fence:          vk::Fence,
     allocator:             Option<Arc<RwLock<vma::Allocator>>>,
 
-    gui_integration: Option<GuiIntegration>,
-    renderer_choice: RendererChoice,
-    use_bih:         bool,
-    render_normals:  bool,
+    gui_integration:     Option<GuiIntegration>,
+    renderer_choice:     RendererChoice,
+    use_bih:             bool,
+    render_normals:      bool,
 
     rt_camera:         Camera,
     rt_camera_buffer:  Option<AllocatedBuffer<CameraUniform>>,
@@ -298,32 +298,77 @@ impl App {
 
     pub fn resize(&mut self, extent: vk::Extent2D) {
         self.swapchain.update(extent);
-
-        // TODO trigger this via GUI
-        // let vk_ctx = self.vulkan_context();
-        // self.rt_camera.img_size = [extent.width, extent.height];
-        // self.rt_camera_buffer.as_mut().unwrap().set_data(&[self.rt_camera.into_uniform()]);
-        // self.pure_ray_tracer.as_mut().unwrap().set_output_extent(extent);
-        // self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx, self.rt_camera);
     }
 
     pub fn gui(&mut self, ctx: &egui::Context) {
         let vk_ctx = self.vulkan_context();
 
-        egui::Window::new("Settings").resizable(false).collapsible(false).show(ctx, |ui| {
-            ui.radio_value(&mut self.renderer_choice, RendererChoice::Pure, "Pure ray tracing");
-            ui.radio_value(&mut self.renderer_choice, RendererChoice::Deferred, "Deferred ray tracing");
+        egui::SidePanel::left("panel-settings").show(ctx, |ui| {
+            ui.heading("Settings");
 
-            if ui.checkbox(&mut self.use_bih, "Use BIH").clicked() {
-                self.rt_push_constants.flags.set(RtFlags::USE_BIH, self.use_bih);
-            }
-            if ui.checkbox(&mut self.render_normals, "Render normals").clicked() {
-                self.rt_push_constants.flags.set(RtFlags::RENDER_NORMALS, self.render_normals);
-            }
+            ui.collapsing("Renderer", |ui| {
+                ui.radio_value(&mut self.renderer_choice, RendererChoice::Pure, "Pure");
+                ui.radio_value(&mut self.renderer_choice, RendererChoice::Deferred, "Deferred");
+            });
+
+            ui.collapsing("Render options", |ui| {
+                if ui.checkbox(&mut self.use_bih, "Use BIH").clicked() {
+                    self.rt_push_constants.flags.set(RtFlags::USE_BIH, self.use_bih);
+                }
+                if ui.checkbox(&mut self.render_normals, "Render normals").clicked() {
+                    self.rt_push_constants.flags.set(RtFlags::RENDER_NORMALS, self.render_normals);
+                }
+            });
+
+            ui.collapsing("Image size", |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.rt_camera.img_size[0])
+                        .clamp_range(1..=4096)
+                        .speed(0.1));
+                    ui.label("Width");
+                });
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.rt_camera.img_size[1])
+                        .clamp_range(1..=4096)
+                        .speed(1));
+                    ui.label("Height");
+                });
+            });
+
+            ui.collapsing("Camera", |ui| {
+                ui.label("Position");
+                widgets::drag_vec3(ui, &mut self.rt_camera.position);
+                ui.label("Look at");
+                widgets::drag_vec3(ui, &mut self.rt_camera.look_at);
+                ui.label("Up");
+                widgets::drag_vec3(ui, &mut self.rt_camera.up);
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.rt_camera.vertical_fov)
+                        .clamp_range(0.0..=360.0)
+                        .speed(0.1));
+                    ui.label("Vertical FOV");
+                });
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.rt_camera.max_reflections)
+                        .clamp_range(1..=100)
+                        .speed(1));
+                    ui.label("Max reflections");
+                });
+                let sample_count_choices = vec!["1x", "4x", "9x", "16x", "25x", "36x", "49x", "64x", "81x", "100x"];
+                egui::ComboBox::from_label("Sample count")
+                    .selected_text(sample_count_choices[self.rt_camera.sqrt_samples as usize - 1])
+                    .show_ui(ui, |ui| {
+                        for (choice, label) in sample_count_choices.into_iter().enumerate() {
+                            ui.selectable_value(&mut self.rt_camera.sqrt_samples, choice as u32 + 1, label);
+                        }
+                    });
+            });
 
             if ui.button("Render").clicked() {
+                self.rt_camera_buffer.as_mut().unwrap().set_data(&[self.rt_camera.into_uniform()]);
                 match self.renderer_choice {
                     RendererChoice::Pure => {
+                        self.pure_ray_tracer.as_mut().unwrap().set_output_extent(self.rt_camera.image_extent_2d());
                         self.pure_ray_tracer.as_mut().unwrap().render(
                             vk_ctx,
                             &self.rt_push_constants,
@@ -331,6 +376,7 @@ impl App {
                         );
                     }
                     RendererChoice::Deferred => {
+                        self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx.clone(), self.rt_camera);
                         self.deferred_ray_tracer.as_mut().unwrap().render(
                             vk_ctx,
                             &self.rt_push_constants,
@@ -341,7 +387,7 @@ impl App {
             }
         });
 
-        egui::Window::new("Image").resizable(false).collapsible(false).show(ctx, |ui| {
+        egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Image");
         });
     }

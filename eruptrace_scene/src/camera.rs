@@ -42,7 +42,7 @@ impl Camera {
         let sqrt_samples = object["sqrt_samples"].as_u64().unwrap_or(1) as u32;
         let max_reflections = object["max_reflections"].as_u64().unwrap_or(1) as u32;
 
-        Ok(Camera { position, look_at, up, img_size: [1, 1], vertical_fov, sqrt_samples, max_reflections })
+        Ok(Camera { position, look_at, up, img_size: [512, 512], vertical_fov, sqrt_samples, max_reflections })
     }
 
     pub fn image_extent_2d(&self) -> vk::Extent2D {
