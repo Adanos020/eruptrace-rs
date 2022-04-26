@@ -5,6 +5,7 @@ use std::{
     borrow::Borrow,
     sync::{Arc, RwLock},
 };
+use std::time::{Duration, Instant};
 
 use egui::{ClippedMesh, TexturesDelta};
 use erupt::{utils::surface, vk, DeviceLoader, EntryLoader, ExtendableFrom, InstanceLoader, SmallVec};
@@ -45,11 +46,12 @@ pub struct App {
     upload_fence:          vk::Fence,
     allocator:             Option<Arc<RwLock<vma::Allocator>>>,
 
-    gui_integration: Option<GuiIntegration>,
-    renderer_choice: RendererChoice,
-    use_bih:         bool,
-    render_normals:  bool,
-    target_texture:  Option<egui::TextureHandle>,
+    gui_integration:  Option<GuiIntegration>,
+    renderer_choice:  RendererChoice,
+    use_bih:          bool,
+    render_normals:   bool,
+    target_texture:   Option<egui::TextureHandle>,
+    last_render_time: Option<Duration>,
 
     rt_camera:         Camera,
     rt_camera_buffer:  Option<AllocatedBuffer<CameraUniform>>,
@@ -246,6 +248,7 @@ impl App {
             use_bih: false,
             render_normals: false,
             target_texture: None,
+            last_render_time: None,
             rt_camera,
             rt_push_constants: RtPushConstants {
                 n_triangles: rt_scene_buffers.as_ref().unwrap().n_triangles,
@@ -337,6 +340,10 @@ impl App {
             if ui.button("Render").clicked() {
                 self.render_scene(ctx);
             }
+
+            if let Some(duration) = self.last_render_time.borrow() {
+                ui.label(format!("Render completed in {}s", duration.as_secs_f32()));
+            }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -376,15 +383,21 @@ impl App {
         match self.renderer_choice {
             RendererChoice::Pure => {
                 self.pure_ray_tracer.as_mut().unwrap().set_output_extent(self.rt_camera.image_extent_2d());
+
+                let now = Instant::now();
                 self.pure_ray_tracer.as_mut().unwrap().render(vk_ctx.clone(), &self.rt_push_constants, &target_image);
+                self.last_render_time = Some(now.elapsed());
             }
             RendererChoice::Deferred => {
                 self.deferred_ray_tracer.as_mut().unwrap().update_output(vk_ctx.clone(), self.rt_camera);
+
+                let now = Instant::now();
                 self.deferred_ray_tracer.as_mut().unwrap().render(
                     vk_ctx.clone(),
                     &self.rt_push_constants,
                     &target_image,
                 );
+                self.last_render_time = Some(now.elapsed());
             }
         }
 
