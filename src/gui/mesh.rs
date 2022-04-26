@@ -1,4 +1,4 @@
-use egui::{epaint::Vertex, TextureId};
+use egui::epaint::Vertex;
 use erupt::vk;
 use eruptrace_vk::{
     pipeline::{
@@ -10,13 +10,11 @@ use eruptrace_vk::{
         RasterisationStateInfo,
         SamplerCreateInfo,
     },
+    push_constants::GuiPushConstants,
     VulkanContext,
 };
 
-use crate::{
-    gui::integration::GuiPushConstants,
-    shaders::{GUI_MESH_FRAGMENT_SHADER, GUI_MESH_VERTEX_SHADER},
-};
+use crate::shaders::{GUI_MESH_FRAGMENT_SHADER, GUI_MESH_VERTEX_SHADER};
 
 #[derive(Clone)]
 pub struct Mesh {
@@ -25,7 +23,6 @@ pub struct Mesh {
     pub index_count:       u32,
     pub graphics_pipeline: Pipeline,
     pub scissor:           vk::Rect2D,
-    pub texture_id:        TextureId,
 }
 
 impl Mesh {
@@ -37,7 +34,6 @@ impl Mesh {
         surface_format: vk::SurfaceFormatKHR,
         image_view: vk::ImageView,
         scissor: vk::Rect2D,
-        texture_id: TextureId,
     ) -> Self {
         let graphics_pipeline = Pipeline::graphics(vk_ctx, GraphicsPipelineCreateInfo {
             vertex_shader:           GUI_MESH_VERTEX_SHADER,
@@ -47,9 +43,7 @@ impl Mesh {
                 color_write_mask: vk::ColorComponentFlags::all(),
                 blend_enable:     true,
             }],
-            colour_blending_info:    vk::PipelineColorBlendStateCreateInfoBuilder::new()
-                .logic_op_enable(true)
-                .logic_op(vk::LogicOp::OR),
+            colour_blending_info:    vk::PipelineColorBlendStateCreateInfoBuilder::new(),
             push_constant_ranges:    vec![vk::PushConstantRangeBuilder::new()
                 .stage_flags(vk::ShaderStageFlags::VERTEX)
                 .offset(0)
@@ -102,6 +96,6 @@ impl Mesh {
             enable_depth_testing:    false,
         });
 
-        Self { vertex_offset, first_index, index_count, graphics_pipeline, scissor, texture_id }
+        Self { vertex_offset, first_index, index_count, graphics_pipeline, scissor }
     }
 }

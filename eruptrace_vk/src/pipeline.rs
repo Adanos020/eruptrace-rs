@@ -191,9 +191,20 @@ impl Pipeline {
             .color_attachment_infos
             .iter()
             .map(|info| {
-                vk::PipelineColorBlendAttachmentStateBuilder::new()
+                let state = vk::PipelineColorBlendAttachmentStateBuilder::new()
                     .color_write_mask(info.color_write_mask)
-                    .blend_enable(info.blend_enable)
+                    .blend_enable(info.blend_enable);
+                if info.blend_enable {
+                    state
+                        .color_blend_op(vk::BlendOp::ADD)
+                        .src_color_blend_factor(vk::BlendFactor::ONE)
+                        .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                        .alpha_blend_op(vk::BlendOp::ADD)
+                        .src_alpha_blend_factor(vk::BlendFactor::SRC_ALPHA)
+                        .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                } else {
+                    state
+                }
             })
             .collect_vec();
         let colour_blending_info = create_info.colour_blending_info.attachments(&colour_blend_attachments);

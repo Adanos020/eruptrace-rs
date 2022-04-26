@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use nalgebra_glm as glm;
 
 bitflags! {
     pub struct RtFlags: u32 {
@@ -12,4 +13,10 @@ bitflags! {
 pub struct RtPushConstants {
     pub n_triangles: u32,
     pub flags:       RtFlags,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct GuiPushConstants {
+    pub screen_size: glm::Vec2,
 }

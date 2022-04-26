@@ -8,7 +8,13 @@ use egui::{
     TexturesDelta,
 };
 use erupt::{vk, DeviceLoader};
-use eruptrace_vk::{contexts::RenderContext, AllocatedBuffer, AllocatedImage, VulkanContext};
+use eruptrace_vk::{
+    contexts::RenderContext,
+    push_constants::GuiPushConstants,
+    AllocatedBuffer,
+    AllocatedImage,
+    VulkanContext,
+};
 use itertools::Itertools;
 use nalgebra_glm as glm;
 use vk_mem_erupt as vma;
@@ -27,12 +33,6 @@ pub struct GuiIntegration {
     meshes_to_destroy:   Vec<(usize, Mesh)>,
     textures_to_destroy: Vec<(usize, AllocatedImage)>,
     frames_in_flight:    usize,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub struct GuiPushConstants {
-    screen_size: glm::Vec2,
 }
 
 impl GuiIntegration {
@@ -103,7 +103,7 @@ impl GuiIntegration {
                 };
                 match image_delta.image.borrow() {
                     ImageData::Alpha(a_image) => {
-                        let texture_data = a_image.pixels.iter().flat_map(|&a| vec![a, a, a, a]).collect_vec();
+                        let texture_data = a_image.srgba_pixels(1.0).collect_vec();
                         image.set_data(vk_ctx.clone(), image_offset, &texture_data)
                     }
                     ImageData::Color(c_image) => image.set_data(vk_ctx.clone(), image_offset, &c_image.pixels),
@@ -112,7 +112,7 @@ impl GuiIntegration {
                 assert!(image_delta.pos.is_none());
                 let image = match image_delta.image.borrow() {
                     ImageData::Alpha(a_image) => {
-                        let texture_data = a_image.pixels.iter().flat_map(|&a| vec![a, a, a, a]).collect_vec();
+                        let texture_data = a_image.srgba_pixels(1.0).collect_vec();
                         AllocatedImage::texture_with_data(
                             vk_ctx.clone(),
                             vk::Format::R8G8B8A8_UNORM,
@@ -125,7 +125,7 @@ impl GuiIntegration {
                     }
                     ImageData::Color(c_image) => AllocatedImage::texture_with_data(
                         vk_ctx.clone(),
-                        vk::Format::R8G8B8A8_UNORM,
+                        vk::Format::R8G8B8A8_SRGB,
                         vk::Extent3D { width: c_image.size[0] as u32, height: c_image.size[1] as u32, depth: 1 },
                         vk::ImageViewType::_2D,
                         1,
@@ -170,7 +170,6 @@ impl GuiIntegration {
                 surface_format,
                 self.textures[&texture_id].view,
                 scissor,
-                texture_id,
             ));
         }
 

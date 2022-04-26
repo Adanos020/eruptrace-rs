@@ -340,7 +340,7 @@ impl App {
         });
     }
 
-    fn render_scene(&mut self, ctx: &egui::Context) {
+    fn render_scene(&mut self, egui_ctx: &egui::Context) {
         let vk_ctx = self.vulkan_context();
         let extent = self.rt_camera.image_extent_3d();
         let target_image = {
@@ -396,10 +396,11 @@ impl App {
             };
             let color_image =
                 egui::ColorImage::from_rgba_unmultiplied(self.rt_camera.img_size.map(|d| d as usize), data);
+            image_data_buffer.allocator.read().unwrap().unmap_memory(&image_data_buffer.allocation);
             egui::ImageData::Color(color_image)
         };
 
-        self.target_texture.replace(ctx.load_texture("scene", image_data));
+        self.target_texture.replace(egui_ctx.load_texture("scene", image_data));
 
         image_data_buffer.destroy();
         target_image.destroy(&vk_ctx.device);
