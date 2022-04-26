@@ -146,7 +146,7 @@ impl Scene {
     pub fn create_buffers(self, vk_ctx: VulkanContext) -> RtSceneBuffers {
         let n_textures = self.texture_paths.len();
         let n_normal_maps = self.normal_map_paths.len();
-        let n_triangles = self.meshes.len() as u32;
+        let n_triangles = self.triangles.len() as u32;
         let textures = self
             .texture_paths
             .into_iter()

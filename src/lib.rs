@@ -249,7 +249,7 @@ impl App {
             rt_camera,
             rt_push_constants: RtPushConstants {
                 n_triangles: rt_scene_buffers.as_ref().unwrap().n_triangles,
-                flags:       RtFlags::USE_BIH,
+                flags:       RtFlags::empty(),
             },
             rt_camera_buffer,
             rt_scene_buffers,
