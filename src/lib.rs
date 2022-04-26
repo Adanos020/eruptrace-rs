@@ -276,55 +276,63 @@ impl App {
         egui::SidePanel::left("panel-settings").show(ctx, |ui| {
             ui.heading("Settings");
 
-            ui.collapsing("Renderer", |ui| {
-                ui.radio_value(&mut self.renderer_choice, RendererChoice::Pure, "Pure");
-                ui.radio_value(&mut self.renderer_choice, RendererChoice::Deferred, "Deferred");
-            });
+            egui::CollapsingHeader::new("Renderer")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.radio_value(&mut self.renderer_choice, RendererChoice::Pure, "Pure");
+                    ui.radio_value(&mut self.renderer_choice, RendererChoice::Deferred, "Deferred");
+                });
 
-            ui.collapsing("Render options", |ui| {
-                if ui.checkbox(&mut self.use_bih, "Use BIH").clicked() {
-                    self.rt_push_constants.flags.set(RtFlags::USE_BIH, self.use_bih);
-                }
-                if ui.checkbox(&mut self.render_normals, "Render normals").clicked() {
-                    self.rt_push_constants.flags.set(RtFlags::RENDER_NORMALS, self.render_normals);
-                }
-            });
+            egui::CollapsingHeader::new("Render options")
+                .default_open(true)
+                .show(ui, |ui| {
+                    if ui.checkbox(&mut self.use_bih, "Use BIH").clicked() {
+                        self.rt_push_constants.flags.set(RtFlags::USE_BIH, self.use_bih);
+                    }
+                    if ui.checkbox(&mut self.render_normals, "Render normals").clicked() {
+                        self.rt_push_constants.flags.set(RtFlags::RENDER_NORMALS, self.render_normals);
+                    }
+                });
 
-            ui.collapsing("Image size", |ui| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut self.rt_camera.img_size[0]).clamp_range(1..=4096).speed(1));
-                    ui.label("Width");
-                });
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut self.rt_camera.img_size[1]).clamp_range(1..=4096).speed(1));
-                    ui.label("Height");
-                });
-            });
-
-            ui.collapsing("Camera", |ui| {
-                ui.label("Position");
-                widgets::drag_vec3(ui, &mut self.rt_camera.position);
-                ui.label("Look at");
-                widgets::drag_vec3(ui, &mut self.rt_camera.look_at);
-                ui.label("Up");
-                widgets::drag_vec3(ui, &mut self.rt_camera.up);
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut self.rt_camera.vertical_fov).clamp_range(0.0..=360.0).speed(0.1));
-                    ui.label("Vertical FOV");
-                });
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut self.rt_camera.max_reflections).clamp_range(1..=100).speed(1));
-                    ui.label("Max reflections");
-                });
-                let sample_count_choices = vec!["1x", "4x", "9x", "16x", "25x", "36x", "49x", "64x", "81x", "100x"];
-                egui::ComboBox::from_label("Sample count")
-                    .selected_text(sample_count_choices[self.rt_camera.sqrt_samples as usize - 1])
-                    .show_ui(ui, |ui| {
-                        for (choice, label) in sample_count_choices.into_iter().enumerate() {
-                            ui.selectable_value(&mut self.rt_camera.sqrt_samples, choice as u32 + 1, label);
-                        }
+            egui::CollapsingHeader::new("Image size")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut self.rt_camera.img_size[0]).clamp_range(1..=4096).speed(1));
+                        ui.label("Width");
                     });
-            });
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut self.rt_camera.img_size[1]).clamp_range(1..=4096).speed(1));
+                        ui.label("Height");
+                    });
+                });
+
+            egui::CollapsingHeader::new("Camera")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.label("Position");
+                    widgets::drag_vec3(ui, &mut self.rt_camera.position);
+                    ui.label("Look at");
+                    widgets::drag_vec3(ui, &mut self.rt_camera.look_at);
+                    ui.label("Up");
+                    widgets::drag_vec3(ui, &mut self.rt_camera.up);
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut self.rt_camera.vertical_fov).clamp_range(0.0..=360.0).speed(0.1));
+                        ui.label("Vertical FOV");
+                    });
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut self.rt_camera.max_reflections).clamp_range(1..=100).speed(1));
+                        ui.label("Max reflections");
+                    });
+                    let sample_count_choices = vec!["1x", "4x", "9x", "16x", "25x", "36x", "49x", "64x", "81x", "100x"];
+                    egui::ComboBox::from_label("Sample count")
+                        .selected_text(sample_count_choices[self.rt_camera.sqrt_samples as usize - 1])
+                        .show_ui(ui, |ui| {
+                            for (choice, label) in sample_count_choices.into_iter().enumerate() {
+                                ui.selectable_value(&mut self.rt_camera.sqrt_samples, choice as u32 + 1, label);
+                            }
+                        });
+                });
 
             if ui.button("Render").clicked() {
                 self.render_scene(ctx);
