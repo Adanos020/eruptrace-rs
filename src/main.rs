@@ -36,26 +36,21 @@ fn main() {
 
             event_loop.run(move |event, _, control_flow| {
                 *control_flow = ControlFlow::Poll;
-                let new_input = egui_winit_state.take_egui_input(&window);
                 match event {
+                    Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => *control_flow = ControlFlow::Exit,
+                    Event::WindowEvent { event: WindowEvent:: Resized(size), .. } => {
+                        let [width, height]: [u32; 2] = size.into();
+                        app.resize(vk::Extent2D { width, height })
+                    }
                     Event::WindowEvent { event, .. } => {
                         egui_winit_state.on_event(&egui_context, &event);
-                        match event {
-                            WindowEvent::CloseRequested => {
-                                *control_flow = ControlFlow::Exit;
-                            }
-                            WindowEvent::Resized(size) => {
-                                let [width, height]: [u32; 2] = size.into();
-                                app.resize(vk::Extent2D { width, height })
-                            }
-                            _ => (),
-                        }
                     }
                     Event::MainEventsCleared => {
+                        let new_input = egui_winit_state.take_egui_input(&window);
                         let full_output = egui_context.run(new_input, |egui_context| app.gui(egui_context));
+                        egui_winit_state.handle_platform_output(&window, &egui_context, full_output.platform_output);
                         let clipped_meshes = egui_context.tessellate(full_output.shapes);
                         app.render(&full_output.textures_delta, clipped_meshes);
-                        egui_winit_state.handle_platform_output(&window, &egui_context, full_output.platform_output);
                     }
                     _ => {}
                 }
