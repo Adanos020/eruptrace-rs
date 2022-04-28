@@ -775,6 +775,7 @@ dependencies = [
  "image",
  "itertools",
  "nalgebra-glm",
+ "obj-rs",
  "serde_json",
  "std140",
  "vk-mem-erupt",
@@ -1470,6 +1471,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "obj-rs"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c90a2f645433dba5c609451d3fa847282b0f23ee8d8fa75491a946af53cb1db4"
+dependencies = [
+ "num-traits",
+ "serde",
 ]
 
 [[package]]

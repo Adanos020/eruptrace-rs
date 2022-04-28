@@ -108,7 +108,7 @@ impl Scene {
                 .map_or(&vec![], |v| v)
                 .iter()
                 .filter(|m| m.is_object())
-                .map(|m| Mesh::from_json(m, &material_names))
+                .map(|m| Mesh::from_json(&scene_path, m, &material_names))
                 .filter_map(|m| match m {
                     Ok(m) => {
                         let t = m.triangles();

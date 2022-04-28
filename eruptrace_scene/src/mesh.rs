@@ -1,5 +1,9 @@
+use std::fs::File;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
 use itertools::Itertools;
 use nalgebra_glm as glm;
+use obj::Obj;
 use serde_json as js;
 use std140::repr_std140;
 
@@ -36,18 +40,41 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn from_json(object: &js::Value, material_names: &[String]) -> anyhow::Result<Self> {
-        let positions = object["positions"].as_array().unwrap().iter().filter_map(to_vec3).collect_vec();
-        let normals = object["normals"].as_array().unwrap().iter().filter_map(to_vec3).collect_vec();
-        let texcoords = object["texcoords"].as_array().unwrap().iter().filter_map(to_vec2).collect_vec();
+    pub fn from_json<P: AsRef<Path>>(scene_path: P, object: &js::Value, material_names: &[String]) -> anyhow::Result<Self> {
+        let (positions, normals, texcoords, indices) = if let Some(model_path) = object["model"].as_str() {
+            let model_path = {
+                let mut path = PathBuf::new();
+                path.push(&scene_path);
+                path.push("models");
+                path.push(&model_path);
+                path
+            };
 
-        let indices = object["indices"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter_map(serde_json::Value::as_u64)
-            .map(|i| i as u32)
-            .collect_vec();
+            let input = BufReader::new(File::open(model_path)?);
+            let model: Obj = obj::load_obj(input)?;
+            let mut positions = Vec::with_capacity(model.vertices.len());
+            let mut normals = Vec::with_capacity(model.vertices.len());
+            let mut texcoords = Vec::with_capacity(model.vertices.len());
+            dbg!(model.vertices.len());
+            for vertex in model.vertices {
+                positions.push(glm::make_vec3(&vertex.position));
+                normals.push(glm::make_vec3(&vertex.normal));
+                texcoords.push(glm::vec2(0.0, 0.0));
+            }
+            (positions, normals, texcoords, model.indices.into_iter().map(|i| i as u32).collect())
+        } else {
+            let positions = object["positions"].as_array().unwrap().iter().filter_map(to_vec3).collect_vec();
+            let normals = object["normals"].as_array().unwrap().iter().filter_map(to_vec3).collect_vec();
+            let texcoords = object["texcoords"].as_array().unwrap().iter().filter_map(to_vec2).collect_vec();
+            let indices = object["indices"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(serde_json::Value::as_u64)
+                .map(|i| i as u32)
+                .collect_vec();
+            (positions, normals, texcoords, indices)
+        };
 
         let transform: glm::Mat4x4 = match object["transform"].as_object() {
             Some(object) => {

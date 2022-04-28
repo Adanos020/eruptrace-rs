@@ -22,7 +22,7 @@ eruptrace_scene = { path = "eruptrace_scene" }
 eruptrace_vk = { path = "eruptrace_vk" }
 
 erupt = "0.22"
-erupt-bootstrap = "0.2.3"
+erupt-bootstrap = "0.2"
 vk-mem-erupt = { git = "https://github.com/HindrikStegenga/vk-mem-erupt" }
 
 egui = "0.17"

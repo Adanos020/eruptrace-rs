@@ -1,0 +1,64 @@
+{
+  "meshes": [
+    {
+      "positions": [
+        [-10.0, 0.0, 10.0],
+        [10.0, 0.0, 10.0],
+        [10.0, 0.0, -10.0],
+        [-10.0, 0.0, -10.0]
+      ],
+      "normals": [
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0]
+      ],
+      "texcoords": [
+        [0.0, 10.0],
+        [10.0, 10.0],
+        [10.0, 0.0],
+        [0.0, 0.0]
+      ],
+      "indices": [0, 1, 2, 0, 2, 3],
+      "transform": {
+        "position": [5.0, 0.0, 5.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "material": "ground"
+    },
+    {
+      "model": "bunny.obj",
+      "transform": {
+        "position": [0.0, 0.5, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "material": "bunny"
+    }
+  ],
+  "materials": {
+    "ground": {
+      "type": "reflective",
+      "texture": "ground",
+      "normal_map": "ground",
+      "fuzz": 1.0
+    },
+    "bunny": {
+      "type": "refractive",
+      "texture": "bunny",
+      "normal_map": "bunny",
+      "index": 1.5
+    }
+  },
+  "textures": {
+    "sky": "sky.png",
+    "ground": "grass.png",
+    "bunny": "red.png"
+  },
+  "normal_maps": {
+    "default": "flat.png",
+    "ground": "grass.png",
+    "bunny": "flat.png"
+  }
+}
