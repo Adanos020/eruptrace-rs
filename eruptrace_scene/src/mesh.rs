@@ -55,7 +55,6 @@ impl Mesh {
             let mut positions = Vec::with_capacity(model.vertices.len());
             let mut normals = Vec::with_capacity(model.vertices.len());
             let mut texcoords = Vec::with_capacity(model.vertices.len());
-            dbg!(model.vertices.len());
             for vertex in model.vertices {
                 positions.push(glm::make_vec3(&vertex.position));
                 normals.push(glm::make_vec3(&vertex.normal));

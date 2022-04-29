@@ -68,18 +68,22 @@ bool hitShapeBih(in Ray ray, out Hit hit) {
         float minDistance;
         float maxDistance;
     } stack[64];
-    stack[0] = StackEntry(0, minDistance, maxDistance);
-    int entryIndex = 0;
+    stack[0].nodeIndex = 0;
+    stack[0].minDistance = minDistance;
+    stack[0].maxDistance = maxDistance;
 
+    int entryIndex = 0;
     while (entryIndex >= 0) {
         StackEntry currEntry = stack[entryIndex--];
         bool leafHit = true;
 
-        // Traverse tree
+        // Traverse subtree
         while (bihNodes[currEntry.nodeIndex].nodeType != BIH_LEAF) {
             uint axis = bihNodes[currEntry.nodeIndex].nodeType;
-            vec2 distancesToPlanes = vec2(bihNodes[currEntry.nodeIndex].clipLeft, bihNodes[currEntry.nodeIndex].clipRight);
-            distancesToPlanes = (distancesToPlanes - ray.origin[axis]) * ray.invDirection[axis];
+            vec2 distancesToPlanes = vec2(
+                (bihNodes[currEntry.nodeIndex].clipLeft - ray.origin[axis]) * ray.invDirection[axis],
+                (bihNodes[currEntry.nodeIndex].clipRight - ray.origin[axis]) * ray.invDirection[axis]
+            );
 
             uint node1 = uint(ray.direction[axis] < 0);
             uint node2 = 1 - node1;
@@ -105,7 +109,7 @@ bool hitShapeBih(in Ray ray, out Hit hit) {
                 }
             } else if (hit2Occurred) {
                 currEntry.nodeIndex = children[node2];
-                currEntry.maxDistance = max(currEntry.minDistance, dist2);
+                currEntry.minDistance = max(currEntry.minDistance, dist2);
             } else {
                 leafHit = false;
                 break;

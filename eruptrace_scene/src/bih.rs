@@ -71,12 +71,18 @@ impl Bih {
     pub fn new(triangles: &mut [Triangle]) -> Self {
         let mut nodes = vec![BihNode::default()];
         if !triangles.is_empty() {
-            let all_triangles_addr = triangles.as_ptr() as usize;
             let bounds = calculate_bounds(triangles);
             nodes.reserve(2 * triangles.len());
-            make_hierarchy(triangles, all_triangles_addr, bounds, 0, &mut nodes);
+            make_hierarchy(triangles, triangles.as_ptr(), bounds, 0, &mut nodes);
             nodes.shrink_to_fit();
         }
+
+        assert_eq!(triangles.len(), nodes.iter().fold(0, |c, n| match n.data {
+            BihNodeData::Branch { .. } => c,
+            BihNodeData::Leaf { count, .. } => c + count,
+        }));
+        dbg!(&nodes);
+
         Self(nodes)
     }
 }
@@ -107,14 +113,14 @@ fn calculate_bounds(triangles: &[Triangle]) -> BoundingBox {
         BoundingBox { min: glm::vec3(f32::MAX, f32::MAX, f32::MAX), max: glm::vec3(f32::MIN, f32::MIN, f32::MIN) },
         |s_bounds, t_bounds| BoundingBox {
             min: glm::vec3(
-                s_bounds.min[0].min(t_bounds.min[0]),
-                s_bounds.min[1].min(t_bounds.min[1]),
-                s_bounds.min[2].min(t_bounds.min[2]),
+                s_bounds.min.x.min(t_bounds.min.x),
+                s_bounds.min.y.min(t_bounds.min.y),
+                s_bounds.min.z.min(t_bounds.min.z),
             ),
             max: glm::vec3(
-                s_bounds.max[0].max(t_bounds.max[0]),
-                s_bounds.max[1].max(t_bounds.max[1]),
-                s_bounds.max[2].max(t_bounds.max[2]),
+                s_bounds.max.x.max(t_bounds.max.x),
+                s_bounds.max.y.max(t_bounds.max.y),
+                s_bounds.max.z.max(t_bounds.max.z),
             ),
         },
     )
@@ -122,7 +128,7 @@ fn calculate_bounds(triangles: &[Triangle]) -> BoundingBox {
 
 fn make_hierarchy(
     triangles_part: &mut [Triangle],
-    all_triangles_addr: usize,
+    all_triangles_ptr: *const Triangle,
     bounds: BoundingBox,
     current: usize,
     out_nodes: &mut Vec<BihNode>,
@@ -139,13 +145,12 @@ fn make_hierarchy(
                 out_nodes[current].ty = ty;
                 out_nodes[current].data = BihNodeData::Branch { clip_left, clip_right, child_left, child_right };
 
-                make_hierarchy(&mut triangles_part[..middle], all_triangles_addr, left_box, child_left, out_nodes);
-                make_hierarchy(&mut triangles_part[middle..], all_triangles_addr, right_box, child_right, out_nodes);
+                make_hierarchy(&mut triangles_part[..middle], all_triangles_ptr, left_box, child_left, out_nodes);
+                make_hierarchy(&mut triangles_part[middle..], all_triangles_ptr, right_box, child_right, out_nodes);
             }
             Split::Leaf => {
                 out_nodes[current].data = BihNodeData::Leaf {
-                    triangle_index: (triangles_part.as_ptr() as usize - all_triangles_addr)
-                        / std::mem::size_of::<Triangle>(),
+                    triangle_index: unsafe { triangles_part.as_ptr().offset_from(all_triangles_ptr) as usize },
                     count:          triangles_part.len(),
                 };
             }
@@ -160,14 +165,16 @@ fn split(triangles_part: &mut [Triangle], current_box: BoundingBox) -> Split {
             let middle = triangles_part
                 .iter_mut()
                 .partition_in_place(|t| t.bounds().centre()[axis_idx] < current_box.centre()[axis_idx]);
-            if middle > 0 && middle < triangles_part.len() - 1 {
+            if (1..triangles_part.len() - 1).contains(&middle) {
                 let max_left = triangles_part[..middle]
                     .iter()
-                    .max_by(|t1, t2| t1.bounds().max[axis_idx].total_cmp(&t2.bounds().max[axis_idx]))
+                    .map(|t| t.bounds())
+                    .max_by(|b1, b2| b1.max[axis_idx].total_cmp(&b2.max[axis_idx]))
                     .unwrap();
                 let min_right = triangles_part[middle..]
                     .iter()
-                    .min_by(|t1, t2| t1.bounds().min[axis_idx].total_cmp(&t2.bounds().min[axis_idx]))
+                    .map(|t| t.bounds())
+                    .min_by(|b1, b2| b1.min[axis_idx].total_cmp(&b2.min[axis_idx]))
                     .unwrap();
                 return Split::Axis {
                     ty: match axis_idx {
@@ -179,16 +186,16 @@ fn split(triangles_part: &mut [Triangle], current_box: BoundingBox) -> Split {
                     middle,
                     left_box: {
                         let mut bounds = current_box;
-                        bounds.max[axis_idx] = max_left.bounds().min[axis_idx];
+                        bounds.max[axis_idx] = max_left.min[axis_idx];
                         bounds
                     },
                     right_box: {
                         let mut bounds = current_box;
-                        bounds.min[axis_idx] = min_right.bounds().max[axis_idx];
+                        bounds.min[axis_idx] = min_right.max[axis_idx];
                         bounds
                     },
-                    clip_left: max_left.bounds().max[axis_idx],
-                    clip_right: min_right.bounds().min[axis_idx],
+                    clip_left: max_left.max[axis_idx],
+                    clip_right: min_right.min[axis_idx],
                 };
             }
             axis_idx = (axis_idx + 1) % 3;
@@ -198,10 +205,10 @@ fn split(triangles_part: &mut [Triangle], current_box: BoundingBox) -> Split {
 }
 
 fn choose_split_axis(bounds: BoundingBox) -> BihNodeType {
-    let box_size = bounds.max - bounds.min;
-    if box_size[0] > box_size[1] && box_size[0] > box_size[2] {
+    let box_size: glm::Vec3 = bounds.max - bounds.min;
+    if box_size.x > box_size.y && box_size.x > box_size.z {
         BihNodeType::X
-    } else if box_size[1] > box_size[2] {
+    } else if box_size.y > box_size.z {
         BihNodeType::Y
     } else {
         BihNodeType::Z
