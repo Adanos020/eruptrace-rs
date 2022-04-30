@@ -19,6 +19,7 @@ const uint BIH_LEAF = 3;
 
 const uint FLAG_USE_BIH = 1 << 0;
 const uint FLAG_RENDER_NORMALS = 1 << 1;
+const uint FLAG_RENDER_BIH = 1 << 2;
 
 // Ray tracing ---------------------------------------------------------------------------------------------------------
 
@@ -72,6 +73,8 @@ bool hitShapeBih(in Ray ray, out Hit hit) {
     stack[0].minDistance = minDistance;
     stack[0].maxDistance = maxDistance;
 
+    uint level = 0;
+
     int entryIndex = 0;
     while (entryIndex >= 0) {
         StackEntry currEntry = stack[entryIndex--];
@@ -80,7 +83,7 @@ bool hitShapeBih(in Ray ray, out Hit hit) {
         // Traverse subtree
         while (bihNodes[currEntry.nodeIndex].nodeType != BIH_LEAF) {
             uint axis = bihNodes[currEntry.nodeIndex].nodeType;
-            vec2 distancesToPlanes = vec2(
+            float distancesToPlanes[2] = float[](
                 (bihNodes[currEntry.nodeIndex].clipLeft - ray.origin[axis]) * ray.invDirection[axis],
                 (bihNodes[currEntry.nodeIndex].clipRight - ray.origin[axis]) * ray.invDirection[axis]
             );
@@ -98,6 +101,26 @@ bool hitShapeBih(in Ray ray, out Hit hit) {
                 bihNodes[currEntry.nodeIndex].childLeft,
                 bihNodes[currEntry.nodeIndex].childRight
             );
+
+            if ((flags & FLAG_RENDER_BIH) != 0 && level++ == drawBihLevel) {
+                if (hit1Occurred) {
+                    if (hit2Occurred) {
+                        hit.materialIndex = dist1 < dist2 ? 0 : 1;
+                        hit.distance = min(dist1, dist2);
+                        hit.position = pointOnRay(ray, hit.distance);
+                    } else {
+                        hit.materialIndex = 0;
+                        hit.distance = dist1;
+                        hit.position = pointOnRay(ray, hit.distance);
+                    }
+                    return true;
+                } else if (hit2Occurred) {
+                    hit.materialIndex = 1;
+                    hit.distance = dist2;
+                    hit.position = pointOnRay(ray, hit.distance);
+                    return true;
+                }
+            }
 
             if (hit1Occurred) {
                 currEntry.nodeIndex = children[node1];
@@ -131,6 +154,9 @@ bool hitShapeBih(in Ray ray, out Hit hit) {
         }
     }
 
+    if ((flags & FLAG_RENDER_BIH) != 0) {
+        hit.materialIndex = 2;
+    }
     return hitOccured;
 }
 
@@ -200,6 +226,9 @@ bool scatter(Hit hit, out Scattering scattering) {
 
     if ((flags & FLAG_RENDER_NORMALS) != 0) {
         scattering.color = vec4(0.5f + (0.5f * hit.normal), 1.f);
+        return false;
+    } else if ((flags & FLAG_RENDER_BIH) != 0) {
+        scattering.color = vec4(float(hit.materialIndex == 0), float(hit.materialIndex == 2), float(hit.materialIndex == 1), 1.f);
         return false;
     } else {
         switch (material.materialType) {

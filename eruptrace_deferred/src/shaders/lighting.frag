@@ -33,6 +33,7 @@ layout(set = 1, binding = 5, std140) readonly buffer TriangleData {
 layout(push_constant) uniform Constants {
     uint nTriangles;
     uint flags;
+    uint drawBihLevel;
 };
 
 #include <ray_tracing.glsl>

@@ -50,6 +50,7 @@ pub struct App {
     renderer_choice:  RendererChoice,
     use_bih:          bool,
     render_normals:   bool,
+    render_bih:       bool,
     target_texture:   Option<egui::TextureHandle>,
     last_render_time: Option<Duration>,
 
@@ -247,12 +248,14 @@ impl App {
             renderer_choice: RendererChoice::Pure,
             use_bih: false,
             render_normals: false,
+            render_bih: false,
             target_texture: None,
             last_render_time: None,
             rt_camera,
             rt_push_constants: RtPushConstants {
-                n_triangles: rt_scene_buffers.as_ref().unwrap().n_triangles,
-                flags:       RtFlags::empty(),
+                n_triangles:    rt_scene_buffers.as_ref().unwrap().n_triangles,
+                flags:          RtFlags::empty(),
+                draw_bih_level: 0,
             },
             rt_camera_buffer,
             rt_scene_buffers,
@@ -295,6 +298,13 @@ impl App {
                     if ui.checkbox(&mut self.render_normals, "Render normals").clicked() {
                         self.rt_push_constants.flags.set(RtFlags::RENDER_NORMALS, self.render_normals);
                     }
+                    if ui.checkbox(&mut self.render_bih, "Render BIH").clicked() {
+                        self.rt_push_constants.flags.set(RtFlags::RENDER_BIH, self.render_bih);
+                    }
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut self.rt_push_constants.draw_bih_level).clamp_range(0..=4096).speed(1));
+                        ui.label("Draw BIH level");
+                    });
                 });
 
             egui::CollapsingHeader::new("Image size")

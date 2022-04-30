@@ -73,7 +73,7 @@ impl Bih {
         if !triangles.is_empty() {
             let bounds = calculate_bounds(triangles);
             nodes.reserve(2 * triangles.len());
-            make_hierarchy(triangles, triangles.as_ptr(), bounds, 0, &mut nodes);
+            make_hierarchy(triangles, 0, bounds, 0, &mut nodes);
             nodes.shrink_to_fit();
         }
 
@@ -128,7 +128,7 @@ fn calculate_bounds(triangles: &[Triangle]) -> BoundingBox {
 
 fn make_hierarchy(
     triangles_part: &mut [Triangle],
-    all_triangles_ptr: *const Triangle,
+    triangles_offset: usize,
     bounds: BoundingBox,
     current: usize,
     out_nodes: &mut Vec<BihNode>,
@@ -145,12 +145,12 @@ fn make_hierarchy(
                 out_nodes[current].ty = ty;
                 out_nodes[current].data = BihNodeData::Branch { clip_left, clip_right, child_left, child_right };
 
-                make_hierarchy(&mut triangles_part[..middle], all_triangles_ptr, left_box, child_left, out_nodes);
-                make_hierarchy(&mut triangles_part[middle..], all_triangles_ptr, right_box, child_right, out_nodes);
+                make_hierarchy(&mut triangles_part[..middle], triangles_offset, left_box, child_left, out_nodes);
+                make_hierarchy(&mut triangles_part[middle..], triangles_offset + middle, right_box, child_right, out_nodes);
             }
             Split::Leaf => {
                 out_nodes[current].data = BihNodeData::Leaf {
-                    triangle_index: unsafe { triangles_part.as_ptr().offset_from(all_triangles_ptr) as usize },
+                    triangle_index: triangles_offset,
                     count:          triangles_part.len(),
                 };
             }
