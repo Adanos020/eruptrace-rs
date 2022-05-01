@@ -16,7 +16,7 @@ pub enum BihNodeData {
 }
 
 #[repr(u32)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, enumn::N)]
 pub enum BihNodeType {
     X    = 0,
     Y    = 1,
@@ -81,7 +81,7 @@ impl Bih {
             BihNodeData::Branch { .. } => c,
             BihNodeData::Leaf { count, .. } => c + count,
         }));
-        dbg!(&nodes);
+        // dbg!(&nodes);
 
         Self(nodes)
     }
@@ -165,7 +165,7 @@ fn split(triangles_part: &mut [Triangle], current_box: BoundingBox) -> Split {
             let middle = triangles_part
                 .iter_mut()
                 .partition_in_place(|t| t.bounds().centre()[axis_idx] < current_box.centre()[axis_idx]);
-            if (1..triangles_part.len() - 1).contains(&middle) {
+            if (1..triangles_part.len()).contains(&middle) {
                 let max_left = triangles_part[..middle]
                     .iter()
                     .map(|t| t.bounds())
@@ -177,12 +177,7 @@ fn split(triangles_part: &mut [Triangle], current_box: BoundingBox) -> Split {
                     .min_by(|b1, b2| b1.min[axis_idx].total_cmp(&b2.min[axis_idx]))
                     .unwrap();
                 return Split::Axis {
-                    ty: match axis_idx {
-                        0 => BihNodeType::X,
-                        1 => BihNodeType::Y,
-                        2 => BihNodeType::Z,
-                        _ => unreachable!(),
-                    },
+                    ty: BihNodeType::n(axis_idx as u32).unwrap(),
                     middle,
                     left_box: {
                         let mut bounds = current_box;

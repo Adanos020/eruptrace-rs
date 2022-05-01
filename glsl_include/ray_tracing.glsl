@@ -78,7 +78,7 @@ bool hitShapeBih(in Ray ray, out Hit hit) {
     int entryIndex = 0;
     while (entryIndex >= 0) {
         StackEntry currEntry = stack[entryIndex--];
-        bool leafHit = true;
+        bool leafHit = (flags & FLAG_RENDER_BIH) == 0;
 
         // Traverse subtree
         while (bihNodes[currEntry.nodeIndex].nodeType != BIH_LEAF) {
@@ -102,10 +102,10 @@ bool hitShapeBih(in Ray ray, out Hit hit) {
                 bihNodes[currEntry.nodeIndex].childRight
             );
 
-            if ((flags & FLAG_RENDER_BIH) != 0 && level++ == drawBihLevel) {
+            if ((flags & FLAG_RENDER_BIH) != 0 && currEntry.nodeIndex == drawBihLevel) {
                 if (hit1Occurred) {
                     if (hit2Occurred) {
-                        hit.materialIndex = dist1 < dist2 ? 0 : 1;
+                        hit.materialIndex = 3;
                         hit.distance = min(dist1, dist2);
                         hit.position = pointOnRay(ray, hit.distance);
                     } else {
@@ -140,7 +140,7 @@ bool hitShapeBih(in Ray ray, out Hit hit) {
         }
 
         // Ray-triangle intersection
-        if (leafHit) {
+        if (leafHit && (flags & FLAG_RENDER_BIH) == 0) {
             uint triangleIndex = bihNodes[currEntry.nodeIndex].childLeft;
             uint triangleCount = bihNodes[currEntry.nodeIndex].childRight;
             for (uint i = triangleIndex; i < triangleIndex + triangleCount; ++i) {
@@ -228,7 +228,11 @@ bool scatter(Hit hit, out Scattering scattering) {
         scattering.color = vec4(0.5f + (0.5f * hit.normal), 1.f);
         return false;
     } else if ((flags & FLAG_RENDER_BIH) != 0) {
-        scattering.color = vec4(float(hit.materialIndex == 0), float(hit.materialIndex == 2), float(hit.materialIndex == 1), 1.f);
+        scattering.color = vec4(
+            float(hit.materialIndex == 0 || hit.materialIndex == 3),
+            float(hit.materialIndex == 2 || hit.materialIndex == 3),
+            float(hit.materialIndex == 1),
+            1.f);
         return false;
     } else {
         switch (material.materialType) {

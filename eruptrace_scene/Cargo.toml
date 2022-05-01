@@ -13,6 +13,7 @@ erupt = "0.22"
 vk-mem-erupt = { git = "https://github.com/HindrikStegenga/vk-mem-erupt" }
 
 anyhow = "1.0"
+enumn = "0.1"
 image = "0.24"
 itertools = "0.10"
 nalgebra-glm = "0.16"
