@@ -270,12 +270,9 @@ bool scatterReflective(in Hit hit, in Material material, out Scattering scatteri
     vec3 randDir = randDirection(dot(hit.position, gl_FragCoord.xyz));
     vec3 scatterDirection = reflected + (fuzz * randDir);
     scatterDirection *= sign(dot(scatterDirection, hit.normal));
-    if (dot(scatterDirection, hit.normal) > 0.f) {
-        scattering.color = sampleTexture(hit.texCoords, material.textureIndex);
-        scattering.newRay = Ray(hit.position, scatterDirection, 1.f / scatterDirection);
-        return true;
-    }
-    return false;
+    scattering.color = sampleTexture(hit.texCoords, material.textureIndex);
+    scattering.newRay = Ray(hit.position, scatterDirection, 1.f / scatterDirection);
+    return true;
 }
 
 bool scatterRefractive(in Hit hit, in Material material, out Scattering scattering) {
