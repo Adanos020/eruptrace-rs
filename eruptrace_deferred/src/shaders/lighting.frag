@@ -49,10 +49,7 @@ void main() {
             float v = (camera.imgSize.y - gl_FragCoord.y - (y * sqrtSamplesInv)) * camera.imgSizeInv.y;
             vec4 samplePosition = camera.bottomLeft + (u * camera.horizontal) + (v * camera.vertical);
 
-            Ray ray;
-            ray.origin = camera.position.xyz;
-            ray.direction = (samplePosition - camera.position).xyz;
-            ray.invDirection = 1.f / ray.direction;
+            vec3 rayDirection = (samplePosition - camera.position).xyz;
 
             vec2 gUV = ((gl_FragCoord.xy * camera.sqrtSamples) + vec2(x, y)) * imgSizeInv;
             vec4 position = texture(inPositions, gUV);
@@ -61,13 +58,13 @@ void main() {
                 // Geometry
                 vec4 material = texture(inMaterials, gUV);
                 vec3 normal = texture(inNormals, gUV).xyz;
-                float dotRayNorm = dot(ray.direction, normal);
+                float dotRayNorm = dot(rayDirection, normal);
 
                 Hit hit;
                 hit.position = position.xyz;
                 hit.normal = normal;
                 hit.texCoords = material.xy;
-                hit.incidental = ray.direction;
+                hit.incidental = rayDirection;
                 hit.materialIndex = uint(material.z);
                 hit.bFrontFace = dotRayNorm < 0.f;
 
@@ -79,7 +76,7 @@ void main() {
                 }
             } else {
                 // Sky
-                vec3 rayDir = normalize(ray.direction);
+                vec3 rayDir = normalize(rayDirection);
                 finalColor += sampleTexture(mappingOnUnitSphere(rayDir), 0);
             }
         }
