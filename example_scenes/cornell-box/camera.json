@@ -1,0 +1,8 @@
+{
+  "position": [0.0, 0.0, -4.25],
+  "look_at": [0.0, 0.0, 0.0],
+  "up": [0.0, 1.0, 0.0],
+  "fov": 90.0,
+  "sqrt_samples": 10,
+  "max_reflections": 10
+}

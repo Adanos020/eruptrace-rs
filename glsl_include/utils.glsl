@@ -7,10 +7,9 @@ float rand(float at) {
 
 vec3 randPointInUnitCube(float at) {
     return vec3(
-    -1.f + (2.f * rand(at)),
-    -1.f + (2.f * rand(at + 1)),
-    -1.f + (2.f * rand(at + 2))
-    );
+        -1.f + (2.f * rand(at)),
+        -1.f + (2.f * rand(at + 1)),
+        -1.f + (2.f * rand(at + 2)));
 }
 
 // Taken from: https://github.com/LWJGL/lwjgl3-demos/blob/main/res/org/lwjgl/demo/opengl/raytracing/randomCommon.glsl
@@ -32,9 +31,8 @@ vec3 pointOnRay(in Ray ray, float distance) {
 
 vec2 mappingOnUnitSphere(vec3 pointOnSphere) {
     return vec2(
-    1.f - ((atan(pointOnSphere.z, pointOnSphere.x) + PI) * ONE_OVER_TWO_PI),
-    1.f - ((asin(pointOnSphere.y) + HALF_PI) * ONE_OVER_PI)
-    );
+        1.f - ((atan(pointOnSphere.z, pointOnSphere.x) + PI) * ONE_OVER_TWO_PI),
+        1.f - ((asin(pointOnSphere.y) + HALF_PI) * ONE_OVER_PI));
 }
 
 vec4 sampleTexture(vec2 texCoords, uint textureIndex) {
