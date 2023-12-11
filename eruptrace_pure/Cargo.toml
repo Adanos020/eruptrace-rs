@@ -15,7 +15,7 @@ vk-mem-erupt = { git = "https://github.com/HindrikStegenga/vk-mem-erupt" }
 
 itertools = "0.12"
 image = "0.24"
-nalgebra-glm = "0.16"
+nalgebra-glm = "0.18"
 std140 = "0.2"
 
 winit = "0.26"

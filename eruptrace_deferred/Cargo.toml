@@ -17,4 +17,4 @@ std140 = "0.2"
 
 itertools = "0.12"
 
-nalgebra-glm = "0.16"
+nalgebra-glm = "0.18"
