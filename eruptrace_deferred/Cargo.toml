@@ -11,8 +11,8 @@ anyhow = "1.0"
 eruptrace_scene = { path = "../eruptrace_scene" }
 eruptrace_vk = { path = "../eruptrace_vk" }
 
-erupt = "0.22"
-vk-mem-erupt = { git = "https://github.com/HindrikStegenga/vk-mem-erupt" }
+erupt = "0.23"
+vk-mem-3-erupt = "0.6"
 std140 = "0.2"
 
 itertools = "0.12"

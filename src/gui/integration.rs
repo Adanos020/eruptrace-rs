@@ -2,11 +2,12 @@ use std::{borrow::Borrow, ffi::c_void};
 
 use egui::{
     epaint::{ahash::AHashMap, Vertex},
-    ClippedMesh,
+    ClippedPrimitive,
     ImageData,
     TextureId,
     TexturesDelta,
 };
+use egui::epaint::Primitive;
 use erupt::{vk, DeviceLoader};
 use eruptrace_vk::{
     contexts::RenderContext,
@@ -17,7 +18,7 @@ use eruptrace_vk::{
 };
 use itertools::Itertools;
 use nalgebra_glm as glm;
-use vk_mem_erupt as vma;
+use vk_mem_3_erupt as vma;
 
 use crate::gui::mesh::Mesh;
 
@@ -92,7 +93,7 @@ impl GuiIntegration {
         vk_ctx: VulkanContext,
         surface_format: vk::SurfaceFormatKHR,
         textures_delta: &TexturesDelta,
-        clipped_meshes: Vec<ClippedMesh>,
+        clipped_meshes: Vec<ClippedPrimitive>,
     ) {
         for (id, image_delta) in textures_delta.set.iter() {
             if self.textures.contains_key(id) {
@@ -102,8 +103,8 @@ impl GuiIntegration {
                     None => vk::Offset3D::default(),
                 };
                 match image_delta.image.borrow() {
-                    ImageData::Alpha(a_image) => {
-                        let texture_data = a_image.srgba_pixels(1.0).collect_vec();
+                    ImageData::Font(a_image) => {
+                        let texture_data = a_image.srgba_pixels(Some(1.0)).collect_vec();
                         image.set_data(vk_ctx.clone(), image_offset, &texture_data)
                     }
                     ImageData::Color(c_image) => image.set_data(vk_ctx.clone(), image_offset, &c_image.pixels),
@@ -111,8 +112,8 @@ impl GuiIntegration {
             } else {
                 assert!(image_delta.pos.is_none());
                 let image = match image_delta.image.borrow() {
-                    ImageData::Alpha(a_image) => {
-                        let texture_data = a_image.srgba_pixels(1.0).collect_vec();
+                    ImageData::Font(a_image) => {
+                        let texture_data = a_image.srgba_pixels(Some(1.0)).collect_vec();
                         AllocatedImage::texture_with_data(
                             vk_ctx.clone(),
                             vk::Format::R8G8B8A8_UNORM,
@@ -147,30 +148,35 @@ impl GuiIntegration {
 
         let mut vertices = vec![];
         let mut indices = vec![];
-        for ClippedMesh(clip, mesh) in clipped_meshes.into_iter() {
-            let vertex_offset = vertices.len() as i32;
-            let first_index = indices.len() as u32;
-            let index_count = mesh.indices.len() as u32;
-            let texture_id = mesh.texture_id;
-            let scissor = vk::Rect2D {
-                offset: vk::Offset2D { x: clip.min.x as i32, y: clip.min.y as i32 },
-                extent: vk::Extent2D {
-                    width:  (clip.max.x - clip.min.x) as u32,
-                    height: (clip.max.y - clip.min.y) as u32,
-                },
-            };
+        for ClippedPrimitive { clip_rect, primitive } in clipped_meshes.into_iter() {
+            match primitive {
+                Primitive::Mesh(mesh) => {
+                    let vertex_offset = vertices.len() as i32;
+                    let first_index = indices.len() as u32;
+                    let index_count = mesh.indices.len() as u32;
+                    let texture_id = mesh.texture_id;
+                    let scissor = vk::Rect2D {
+                        offset: vk::Offset2D { x: clip_rect.min.x as i32, y: clip_rect.min.y as i32 },
+                        extent: vk::Extent2D {
+                            width:  (clip_rect.max.x - clip_rect.min.x) as u32,
+                            height: (clip_rect.max.y - clip_rect.min.y) as u32,
+                        },
+                    };
 
-            vertices.extend(mesh.vertices.into_iter());
-            indices.extend(mesh.indices.into_iter());
-            self.meshes.push(Mesh::new(
-                vk_ctx.clone(),
-                vertex_offset,
-                first_index,
-                index_count,
-                surface_format,
-                self.textures[&texture_id].view,
-                scissor,
-            ));
+                    vertices.extend(mesh.vertices.into_iter());
+                    indices.extend(mesh.indices.into_iter());
+                    self.meshes.push(Mesh::new(
+                        vk_ctx.clone(),
+                        vertex_offset,
+                        first_index,
+                        index_count,
+                        surface_format,
+                        self.textures[&texture_id].view,
+                        scissor,
+                    ));
+                }
+                Primitive::Callback(_) => todo!(),
+            }
         }
 
         let vertex_buf_size = (vertices.len() * std::mem::size_of::<Vertex>()) as vk::DeviceSize;

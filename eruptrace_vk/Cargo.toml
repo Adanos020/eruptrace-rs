@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-erupt = "0.22"
-vk-mem-erupt = { git = "https://github.com/HindrikStegenga/vk-mem-erupt" }
+erupt = "0.23"
+vk-mem-3-erupt = "0.6"
 
 bitflags = "2.4"
 itertools = "0.12"

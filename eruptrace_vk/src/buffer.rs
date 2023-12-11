@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use erupt::vk;
-use vk_mem_erupt as vma;
+use vk_mem_3_erupt as vma;
 
 #[derive(Clone)]
 pub struct AllocatedBuffer<T: Sized> {
@@ -54,7 +54,7 @@ impl<T: Sized> AllocatedBuffer<T> {
 
     pub fn set_data_at(&self, start: usize, data: &[T]) {
         let data_size = std::mem::size_of::<T>() * data.len();
-        assert!(start + data_size <= self.allocation_info.get_size());
+        assert!(start + data_size <= self.allocation_info.get_size() as usize);
         let buffer_addr = self.memory_ptr();
         assert_ne!(buffer_addr, std::ptr::null_mut());
         unsafe {

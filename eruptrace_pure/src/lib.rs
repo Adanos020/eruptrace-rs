@@ -23,7 +23,7 @@ use eruptrace_vk::{
     VulkanContext,
 };
 use nalgebra_glm as glm;
-use vk_mem_erupt as vma;
+use vk_mem_3_erupt as vma;
 
 use crate::shaders::*;
 

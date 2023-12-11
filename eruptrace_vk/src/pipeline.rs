@@ -115,7 +115,7 @@ impl Pipeline {
         let pipeline = unsafe {
             vk_ctx
                 .device
-                .create_compute_pipelines(vk::PipelineCache::null(), &pipeline_infos, None)
+                .create_compute_pipelines(vk::PipelineCache::default(), &pipeline_infos, None)
                 .expect("Cannot create pipelines")[0]
         };
 
@@ -251,7 +251,7 @@ impl Pipeline {
         let pipeline = unsafe {
             vk_ctx
                 .device
-                .create_graphics_pipelines(vk::PipelineCache::null(), &pipeline_infos, None)
+                .create_graphics_pipelines(vk::PipelineCache::default(), &pipeline_infos, None)
                 .expect("Cannot create graphics pipeline")[0]
         };
 

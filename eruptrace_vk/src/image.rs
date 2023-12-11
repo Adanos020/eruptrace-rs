@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use erupt::{vk, DeviceLoader};
-use vk_mem_erupt as vma;
+use vk_mem_3_erupt as vma;
 
 use crate::{command, AllocatedBuffer, VulkanContext};
 

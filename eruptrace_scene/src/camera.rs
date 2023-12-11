@@ -5,7 +5,7 @@ use eruptrace_vk::AllocatedBuffer;
 use nalgebra_glm as glm;
 use serde_json as js;
 use std140::repr_std140;
-use vk_mem_erupt as vma;
+use vk_mem_3_erupt as vma;
 
 use crate::to_vec3;
 

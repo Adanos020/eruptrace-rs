@@ -22,7 +22,7 @@ pub use materials::*;
 pub use mesh::*;
 use nalgebra_glm as glm;
 use serde_json as js;
-use vk_mem_erupt as vma;
+use vk_mem_3_erupt as vma;
 
 use crate::json::to_vec3;
 

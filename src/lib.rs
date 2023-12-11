@@ -7,8 +7,9 @@ use std::{
 };
 use std::time::{Duration, Instant};
 
-use egui::{ClippedMesh, TexturesDelta};
-use erupt::{utils::surface, vk, DeviceLoader, EntryLoader, ExtendableFrom, InstanceLoader, SmallVec};
+use egui::{ClippedPrimitive, TextureOptions, TexturesDelta};
+use erupt::{utils::surface, vk, DeviceLoader, EntryLoader, ExtendableFrom, InstanceLoader, SmallVec, ObjectHandle};
+use erupt::vk::API_VERSION_1_3;
 use erupt_bootstrap as vkb;
 use eruptrace_deferred::DeferredRayTracer;
 use eruptrace_pure::PureRayTracer;
@@ -20,7 +21,7 @@ use eruptrace_vk::{
     AllocatedBuffer,
     AllocatedImage,
 };
-use vk_mem_erupt as vma;
+use vk_mem_3_erupt as vma;
 use winit::window::Window;
 
 use crate::gui::{widgets, GuiIntegration};
@@ -194,8 +195,10 @@ impl App {
                 instance:                        instance.as_ref().unwrap().clone(),
                 flags:                           vma::AllocatorCreateFlags::empty(),
                 preferred_large_heap_block_size: 0,
-                frame_in_use_count:              0,
                 heap_size_limits:                None,
+                allocation_callbacks: None,
+                device_memory_callbacks: None,
+                vulkan_api_version: API_VERSION_1_3,
             };
             let allocator = vma::Allocator::new(&create_info).expect("Cannot create memory allocator");
             Some(Arc::new(RwLock::new(allocator)))
@@ -358,7 +361,7 @@ impl App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(texture) = self.target_texture.borrow() {
-                ui.image(texture, texture.size_vec2());
+                ui.image(texture);
             } else {
                 ui.heading("Click 'Render' to view an image.");
             }
@@ -428,16 +431,16 @@ impl App {
             let color_image =
                 egui::ColorImage::from_rgba_unmultiplied(self.rt_camera.img_size.map(|d| d as usize), data);
             image_data_buffer.allocator.read().unwrap().unmap_memory(&image_data_buffer.allocation);
-            egui::ImageData::Color(color_image)
+            egui::ImageData::Color(color_image.into())
         };
 
-        self.target_texture.replace(egui_ctx.load_texture("scene", image_data));
+        self.target_texture.replace(egui_ctx.load_texture("scene", image_data, TextureOptions::default()));
 
         image_data_buffer.destroy();
         target_image.destroy(&vk_ctx.device);
     }
 
-    pub fn render(&mut self, textures_delta: &TexturesDelta, clipped_meshes: Vec<ClippedMesh>) {
+    pub fn render(&mut self, textures_delta: &TexturesDelta, clipped_meshes: Vec<ClippedPrimitive>) {
         let vk_ctx = self.vulkan_context();
 
         let subresource_range = vk::ImageSubresourceRangeBuilder::new()

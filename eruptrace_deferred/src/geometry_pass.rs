@@ -19,7 +19,7 @@ use eruptrace_vk::{
 use itertools::Itertools;
 use nalgebra_glm as glm;
 use std140::repr_std140;
-use vk_mem_erupt as vma;
+use vk_mem_3_erupt as vma;
 
 use crate::{
     gbuffers::GBuffers,
