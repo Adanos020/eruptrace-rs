@@ -13,7 +13,7 @@ eruptrace_vk = { path = "../eruptrace_vk" }
 erupt = "0.22"
 vk-mem-erupt = { git = "https://github.com/HindrikStegenga/vk-mem-erupt" }
 
-itertools = "0.10"
+itertools = "0.12"
 image = "0.24"
 nalgebra-glm = "0.16"
 std140 = "0.2"

@@ -29,7 +29,7 @@ egui = "0.17"
 egui-winit = "0.17"
 
 anyhow = "1.0"
-itertools = "0.10"
+itertools = "0.12"
 nalgebra-glm = "0.16"
 pico-args = "0.4"
 winit = "0.26"
