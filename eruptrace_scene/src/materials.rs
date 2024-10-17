@@ -1,3 +1,5 @@
+#![allow(non_local_definitions)]
+
 use serde_json as json;
 use std140::repr_std140;
 

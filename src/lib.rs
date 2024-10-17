@@ -97,7 +97,7 @@ impl App {
     }
 
     fn init(&mut self, event_loop: &ActiveEventLoop) {
-        self.window = Some(event_loop.create_window(Window::default_attributes()).unwrap());
+        self.window = Some(event_loop.create_window(Window::default_attributes().with_title("ErupTrace")).unwrap());
 
         let (camera, scene) = Scene::load(&self.args.scene_path).unwrap();
         self.app_state = Some(AppState::new(event_loop, self.window.as_ref().unwrap(), camera, scene).unwrap());
@@ -106,7 +106,7 @@ impl App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let was_uninitialised = matches!(&self.window, None);
+        let was_uninitialised = self.window.is_none();
         if was_uninitialised {
             self.init(event_loop);
         }
@@ -123,7 +123,7 @@ impl ApplicationHandler for App {
                 app_state.resize(vk::Extent2D { width, height })
             }
             WindowEvent::RedrawRequested => {
-                let new_input = app_state.egui_winit_state.take_egui_input(&self.window.as_ref().unwrap());
+                let new_input = app_state.egui_winit_state.take_egui_input(self.window.as_ref().unwrap());
                 let FullOutput { platform_output, textures_delta, shapes, pixels_per_point, viewport_output } =
                     egui_context.run(new_input, |egui_context| app_state.gui(egui_context));
 
@@ -144,7 +144,7 @@ impl ApplicationHandler for App {
                     }
                 }
 
-                app_state.egui_winit_state.handle_platform_output(&self.window.as_ref().unwrap(), platform_output);
+                app_state.egui_winit_state.handle_platform_output(self.window.as_ref().unwrap(), platform_output);
                 let clipped_primitives = app_state.egui_context.tessellate(shapes, pixels_per_point);
                 app_state.render(&textures_delta, clipped_primitives);
             }
@@ -335,7 +335,7 @@ impl AppState {
             egui_context.clone(),
             ViewportId::ROOT,
             window,
-            None,
+            Some(window.scale_factor() as f32),
             event_loop.system_theme(),
             None,
         );
@@ -582,6 +582,7 @@ impl AppState {
             self.swapchain.format(),
             textures_delta,
             clipped_meshes,
+            self.egui_context.pixels_per_point(),
         );
 
         let in_flight = &self.frames[acquired_frame.frame_index];
@@ -636,9 +637,10 @@ impl AppState {
         }
 
         self.gui_integration.as_mut().unwrap().render(RenderContext {
-            device:         self.device.as_ref().unwrap(),
-            command_buffer: in_flight.command_buffer,
-            screen_extent:  extent,
+            device:           self.device.as_ref().unwrap(),
+            command_buffer:   in_flight.command_buffer,
+            screen_extent:    extent,
+            pixels_per_point: self.egui_context.pixels_per_point(),
         });
 
         unsafe {

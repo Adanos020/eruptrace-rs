@@ -39,7 +39,7 @@ impl<T: Sized> AllocatedBuffer<T> {
         usage: vma::MemoryUsage,
         data: &[T],
     ) -> Self {
-        let data_size = std::mem::size_of::<T>() * data.len();
+        let data_size = size_of_val(data);
         let buffer_info = buffer_info.size(data_size as vk::DeviceSize);
         let buf = Self::new(allocator, &buffer_info, usage);
         buf.set_data(data);
@@ -55,7 +55,7 @@ impl<T: Sized> AllocatedBuffer<T> {
     }
 
     pub fn set_data_at(&self, start: usize, data: &[T]) {
-        let data_size = std::mem::size_of::<T>() * data.len();
+        let data_size = size_of_val(data);
         assert!(start + data_size <= self.allocation_info.get_size() as usize);
         let buffer_addr = self.memory_ptr();
         assert_ne!(buffer_addr, std::ptr::null_mut());

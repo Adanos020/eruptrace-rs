@@ -1,13 +1,12 @@
 use std::{borrow::Borrow, ffi::c_void};
 
 use egui::{
-    epaint::{ahash::AHashMap, Vertex},
+    epaint::{ahash::AHashMap, Primitive, Vertex},
     ClippedPrimitive,
     ImageData,
     TextureId,
     TexturesDelta,
 };
-use egui::epaint::Primitive;
 use erupt::{vk, DeviceLoader};
 use eruptrace_vk::{
     contexts::RenderContext,
@@ -94,6 +93,7 @@ impl GuiIntegration {
         surface_format: vk::SurfaceFormatKHR,
         textures_delta: &TexturesDelta,
         clipped_meshes: Vec<ClippedPrimitive>,
+        pixels_per_point: f32,
     ) {
         for (id, image_delta) in textures_delta.set.iter() {
             if self.textures.contains_key(id) {
@@ -132,7 +132,7 @@ impl GuiIntegration {
                             1,
                             &data,
                         )
-                    },
+                    }
                 };
                 self.textures.insert(*id, image);
             }
@@ -156,10 +156,13 @@ impl GuiIntegration {
                     let index_count = mesh.indices.len() as u32;
                     let texture_id = mesh.texture_id;
                     let scissor = vk::Rect2D {
-                        offset: vk::Offset2D { x: clip_rect.min.x as i32, y: clip_rect.min.y as i32 },
+                        offset: vk::Offset2D {
+                            x: (clip_rect.min.x * pixels_per_point) as i32,
+                            y: (clip_rect.min.y * pixels_per_point) as i32,
+                        },
                         extent: vk::Extent2D {
-                            width:  (clip_rect.max.x - clip_rect.min.x) as u32,
-                            height: (clip_rect.max.y - clip_rect.min.y) as u32,
+                            width:  ((clip_rect.max.x - clip_rect.min.x) * pixels_per_point) as u32,
+                            height: ((clip_rect.max.y - clip_rect.min.y) * pixels_per_point) as u32,
                         },
                     };
 
@@ -238,9 +241,10 @@ impl GuiIntegration {
     pub fn render(&mut self, ctx: RenderContext) {
         self.spin_cleanups(ctx.device);
 
-        let RenderContext { device, command_buffer, screen_extent } = ctx;
-        let push_constants =
-            GuiPushConstants { screen_size: glm::vec2(screen_extent.width as f32, screen_extent.height as f32) };
+        let RenderContext { device, command_buffer, screen_extent, pixels_per_point } = ctx;
+        let push_constants = GuiPushConstants {
+            screen_size: glm::vec2(screen_extent.width as f32, screen_extent.height as f32) / pixels_per_point,
+        };
 
         unsafe {
             device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.vertices.buffer], &[0]);
@@ -254,7 +258,7 @@ impl GuiIntegration {
                     mesh.graphics_pipeline.layout,
                     vk::ShaderStageFlags::VERTEX,
                     0,
-                    std::mem::size_of::<GuiPushConstants>() as u32,
+                    size_of::<GuiPushConstants>() as u32,
                     &push_constants as *const GuiPushConstants as *const c_void,
                 );
                 device.cmd_set_scissor(command_buffer, 0, &[mesh.scissor.into_builder()]);

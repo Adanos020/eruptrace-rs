@@ -1,3 +1,5 @@
+#![allow(non_local_definitions)]
+
 use std::sync::{Arc, RwLock};
 
 use erupt::vk;

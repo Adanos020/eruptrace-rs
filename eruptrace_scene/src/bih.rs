@@ -1,3 +1,5 @@
+#![allow(non_local_definitions)]
+
 use nalgebra_glm as glm;
 use std140::repr_std140;
 
@@ -77,10 +79,13 @@ impl Bih {
             nodes.shrink_to_fit();
         }
 
-        assert_eq!(triangles.len(), nodes.iter().fold(0, |c, n| match n.data {
-            BihNodeData::Branch { .. } => c,
-            BihNodeData::Leaf { count, .. } => c + count,
-        }));
+        assert_eq!(
+            triangles.len(),
+            nodes.iter().fold(0, |c, n| match n.data {
+                BihNodeData::Branch { .. } => c,
+                BihNodeData::Leaf { count, .. } => c + count,
+            })
+        );
         // dbg!(&nodes);
 
         Self(nodes)
@@ -146,13 +151,17 @@ fn make_hierarchy(
                 out_nodes[current].data = BihNodeData::Branch { clip_left, clip_right, child_left, child_right };
 
                 make_hierarchy(&mut triangles_part[..middle], triangles_offset, left_box, child_left, out_nodes);
-                make_hierarchy(&mut triangles_part[middle..], triangles_offset + middle, right_box, child_right, out_nodes);
+                make_hierarchy(
+                    &mut triangles_part[middle..],
+                    triangles_offset + middle,
+                    right_box,
+                    child_right,
+                    out_nodes,
+                );
             }
             Split::Leaf => {
-                out_nodes[current].data = BihNodeData::Leaf {
-                    triangle_index: triangles_offset,
-                    count:          triangles_part.len(),
-                };
+                out_nodes[current].data =
+                    BihNodeData::Leaf { triangle_index: triangles_offset, count: triangles_part.len() };
             }
         }
     }

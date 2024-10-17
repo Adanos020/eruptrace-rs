@@ -135,8 +135,6 @@ impl Scene {
                 meshes.push(mesh);
             }
 
-            dbg!(triangles.len());
-
             let bih = Bih::new(&mut triangles);
 
             Self { meshes, triangles, materials, texture_paths, normal_map_paths, bih }

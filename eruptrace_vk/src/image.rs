@@ -86,7 +86,7 @@ impl AllocatedImage {
     ) -> Self {
         let this = Self::new(vk_ctx.clone(), image_info, None, view_type, range);
         this.set_data(vk_ctx.clone(), vk::Offset3D::default(), data);
-        vk_ctx.allocator.read().unwrap().flush_allocation(&this.allocation, 0, std::mem::size_of::<T>() * data.len());
+        vk_ctx.allocator.read().unwrap().flush_allocation(&this.allocation, 0, size_of_val(data));
         this
     }
 

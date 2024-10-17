@@ -20,7 +20,8 @@ pub struct FrameContext {
 
 #[derive(Copy, Clone)]
 pub struct RenderContext<'a> {
-    pub device:         &'a DeviceLoader,
-    pub command_buffer: vk::CommandBuffer,
-    pub screen_extent:  vk::Extent2D,
+    pub device:           &'a DeviceLoader,
+    pub command_buffer:   vk::CommandBuffer,
+    pub screen_extent:    vk::Extent2D,
+    pub pixels_per_point: f32,
 }

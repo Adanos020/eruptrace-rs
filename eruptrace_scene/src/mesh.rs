@@ -1,6 +1,11 @@
-use std::fs::File;
-use std::io::BufReader;
-use std::path::{Path, PathBuf};
+#![allow(non_local_definitions)]
+
+use std::{
+    fs::File,
+    io::BufReader,
+    path::{Path, PathBuf},
+};
+
 use itertools::Itertools;
 use nalgebra_glm as glm;
 use obj::Obj;
@@ -40,13 +45,17 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn from_json<P: AsRef<Path>>(scene_path: P, object: &js::Value, material_names: &[String]) -> anyhow::Result<Self> {
+    pub fn from_json<P: AsRef<Path>>(
+        scene_path: P,
+        object: &js::Value,
+        material_names: &[String],
+    ) -> anyhow::Result<Self> {
         let (positions, normals, texcoords, indices) = if let Some(model_path) = object["model"].as_str() {
             let model_path = {
                 let mut path = PathBuf::new();
                 path.push(&scene_path);
                 path.push("models");
-                path.push(&model_path);
+                path.push(model_path);
                 path
             };
 
