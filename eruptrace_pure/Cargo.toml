@@ -10,12 +10,12 @@ edition = "2021"
 eruptrace_scene = { path = "../eruptrace_scene" }
 eruptrace_vk = { path = "../eruptrace_vk" }
 
-erupt = "0.23"
-vk-mem-3-erupt = "0.6"
+erupt = { git = "https://gitlab.com/Adanos020/erupt" }
+vk-mem-3-erupt = { git = "https://github.com/Adanos020/vk-mem-3-erupt" }
 
-itertools = "0.12"
-image = "0.24"
-nalgebra-glm = "0.18"
+itertools = "0.13"
+image = "0.25"
+nalgebra-glm = "0.19"
 std140 = "0.2"
 
-winit = "0.28"
+winit = "0.30"

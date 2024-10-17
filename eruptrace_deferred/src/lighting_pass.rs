@@ -58,7 +58,7 @@ impl LightingPass {
             let buffer_info = vk::BufferCreateInfoBuilder::new()
                 .usage(vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            AllocatedBuffer::with_data(vk_ctx.allocator.clone(), &buffer_info, vma::MemoryUsage::CpuToGpu, &vertices)
+            AllocatedBuffer::with_data(vk_ctx.allocator.clone(), &buffer_info, vma::MemoryUsage::AutoPreferHost, &vertices)
         };
 
         let graphics_pipeline = Pipeline::graphics(vk_ctx, GraphicsPipelineCreateInfo {

@@ -193,16 +193,21 @@ impl Scene {
             materials_buffer: AllocatedBuffer::with_data(
                 vk_ctx.allocator.clone(),
                 &buffer_info,
-                vma::MemoryUsage::CpuToGpu,
+                vma::MemoryUsage::AutoPreferHost,
                 &materials,
             ),
             triangles_buffer: AllocatedBuffer::with_data(
                 vk_ctx.allocator.clone(),
                 &buffer_info,
-                vma::MemoryUsage::CpuToGpu,
+                vma::MemoryUsage::AutoPreferHost,
                 &triangles,
             ),
-            bih_buffer: AllocatedBuffer::with_data(vk_ctx.allocator, &buffer_info, vma::MemoryUsage::CpuToGpu, &bih),
+            bih_buffer: AllocatedBuffer::with_data(
+                vk_ctx.allocator,
+                &buffer_info,
+                vma::MemoryUsage::AutoPreferHost,
+                &bih,
+            ),
             n_triangles,
         }
     }

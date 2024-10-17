@@ -93,6 +93,6 @@ impl CameraUniform {
         let buffer_info = vk::BufferCreateInfoBuilder::new()
             .usage(vk::BufferUsageFlags::UNIFORM_BUFFER)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
-        AllocatedBuffer::with_data(allocator, &buffer_info, vma::MemoryUsage::CpuToGpu, &[self])
+        AllocatedBuffer::with_data(allocator, &buffer_info, vma::MemoryUsage::AutoPreferHost, &[self])
     }
 }

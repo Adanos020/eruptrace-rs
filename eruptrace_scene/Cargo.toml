@@ -9,14 +9,14 @@ edition = "2021"
 [dependencies]
 eruptrace_vk = { path = "../eruptrace_vk" }
 
-erupt = "0.23"
-vk-mem-3-erupt = "0.6"
+erupt = { git = "https://gitlab.com/Adanos020/erupt" }
+vk-mem-3-erupt = { git = "https://github.com/Adanos020/vk-mem-3-erupt" }
 
 anyhow = "1.0"
 enumn = "0.1"
-image = "0.24"
-itertools = "0.12"
-nalgebra-glm = "0.18"
+image = "0.25"
+itertools = "0.13"
+nalgebra-glm = "0.19"
 obj-rs = "0.7"
 serde_json = "1.0"
 std140 = "0.2"

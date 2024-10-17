@@ -22,7 +22,9 @@ impl<T: Sized> AllocatedBuffer<T> {
     ) -> Self {
         let allocation_info = vma::AllocationCreateInfo {
             usage,
-            flags: vma::AllocationCreateFlags::DEDICATED_MEMORY | vma::AllocationCreateFlags::MAPPED,
+            flags: vma::AllocationCreateFlags::DEDICATED_MEMORY
+                | vma::AllocationCreateFlags::MAPPED
+                | vma::AllocationCreateFlags::HOST_ACCESS_RANDOM,
             ..Default::default()
         };
         let (buffer, allocation, allocation_info) =

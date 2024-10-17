@@ -98,7 +98,7 @@ impl GeometryPass {
             let buffer_info = vk::BufferCreateInfoBuilder::new()
                 .usage(vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            AllocatedBuffer::with_data(vk_ctx.allocator.clone(), &buffer_info, vma::MemoryUsage::CpuToGpu, &vertices)
+            AllocatedBuffer::with_data(vk_ctx.allocator.clone(), &buffer_info, vma::MemoryUsage::AutoPreferHost, &vertices)
         };
 
         let index_buffer = {
@@ -106,7 +106,7 @@ impl GeometryPass {
             let buffer_info = vk::BufferCreateInfoBuilder::new()
                 .usage(vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            AllocatedBuffer::with_data(vk_ctx.allocator.clone(), &buffer_info, vma::MemoryUsage::CpuToGpu, &indices)
+            AllocatedBuffer::with_data(vk_ctx.allocator.clone(), &buffer_info, vma::MemoryUsage::AutoPreferHost, &indices)
         };
 
         let mut vertices_offset = 0;
@@ -143,7 +143,7 @@ impl GeometryPass {
             AllocatedBuffer::with_data(
                 vk_ctx.allocator.clone(),
                 &storage_buffer_info,
-                vma::MemoryUsage::CpuToGpu,
+                vma::MemoryUsage::AutoPreferHost,
                 &uniforms,
             )
         };
@@ -163,7 +163,7 @@ impl GeometryPass {
             AllocatedBuffer::with_data(
                 vk_ctx.allocator.clone(),
                 &uniform_buffer_info,
-                vma::MemoryUsage::CpuToGpu,
+                vma::MemoryUsage::AutoPreferHost,
                 &uniforms,
             )
         };

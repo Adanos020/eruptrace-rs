@@ -21,14 +21,15 @@ eruptrace_pure = { path = "eruptrace_pure" }
 eruptrace_scene = { path = "eruptrace_scene" }
 eruptrace_vk = { path = "eruptrace_vk" }
 
-erupt = "0.23"
+erupt = { git = "https://gitlab.com/Adanos020/erupt" }
 erupt-bootstrap = { git = "https://gitlab.com/Adanos020/erupt-bootstrap" }
-vk-mem-3-erupt = "0.6"
-egui = "0.24"
-egui-winit = "0.24"
+vk-mem-3-erupt = { git = "https://github.com/Adanos020/vk-mem-3-erupt" }
+
+egui = "0.29"
+egui-winit = "0.29"
 
 anyhow = "1.0"
-itertools = "0.12"
-nalgebra-glm = "0.18"
+itertools = "0.13"
+nalgebra-glm = "0.19"
 pico-args = "0.5"
-winit = "0.28"
+winit = "0.30"

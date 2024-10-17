@@ -45,7 +45,7 @@ impl GuiIntegration {
                     .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
                     .sharing_mode(vk::SharingMode::EXCLUSIVE)
                     .size(1024),
-                vma::MemoryUsage::CpuToGpu,
+                vma::MemoryUsage::AutoPreferHost,
             ),
             indices: AllocatedBuffer::new(
                 vk_ctx.allocator,
@@ -53,7 +53,7 @@ impl GuiIntegration {
                     .usage(vk::BufferUsageFlags::INDEX_BUFFER)
                     .sharing_mode(vk::SharingMode::EXCLUSIVE)
                     .size(1024),
-                vma::MemoryUsage::CpuToGpu,
+                vma::MemoryUsage::AutoPreferHost,
             ),
             meshes: vec![],
             textures: AHashMap::new(),
@@ -103,27 +103,15 @@ impl GuiIntegration {
                     None => vk::Offset3D::default(),
                 };
                 match image_delta.image.borrow() {
-                    ImageData::Font(a_image) => {
-                        let texture_data = a_image.srgba_pixels(Some(1.0)).collect_vec();
-                        image.set_data(vk_ctx.clone(), image_offset, &texture_data)
-                    }
                     ImageData::Color(c_image) => image.set_data(vk_ctx.clone(), image_offset, &c_image.pixels),
+                    ImageData::Font(f_image) => {
+                        let data = f_image.srgba_pixels(None).flat_map(|a| a.to_array()).collect_vec();
+                        image.set_data(vk_ctx.clone(), image_offset, &data);
+                    }
                 }
             } else {
                 assert!(image_delta.pos.is_none());
                 let image = match image_delta.image.borrow() {
-                    ImageData::Font(a_image) => {
-                        let texture_data = a_image.srgba_pixels(Some(1.0)).collect_vec();
-                        AllocatedImage::texture_with_data(
-                            vk_ctx.clone(),
-                            vk::Format::R8G8B8A8_UNORM,
-                            vk::Extent3D { width: a_image.size[0] as u32, height: a_image.size[1] as u32, depth: 1 },
-                            vk::ImageViewType::_2D,
-                            1,
-                            1,
-                            &texture_data,
-                        )
-                    }
                     ImageData::Color(c_image) => AllocatedImage::texture_with_data(
                         vk_ctx.clone(),
                         vk::Format::R8G8B8A8_SRGB,
@@ -133,6 +121,18 @@ impl GuiIntegration {
                         1,
                         &c_image.pixels,
                     ),
+                    ImageData::Font(f_image) => {
+                        let data = f_image.srgba_pixels(None).flat_map(|a| a.to_array()).collect_vec();
+                        AllocatedImage::texture_with_data(
+                            vk_ctx.clone(),
+                            vk::Format::R8G8B8A8_SRGB,
+                            vk::Extent3D { width: f_image.size[0] as u32, height: f_image.size[1] as u32, depth: 1 },
+                            vk::ImageViewType::_2D,
+                            1,
+                            1,
+                            &data,
+                        )
+                    },
                 };
                 self.textures.insert(*id, image);
             }
@@ -175,12 +175,14 @@ impl GuiIntegration {
                         scissor,
                     ));
                 }
-                Primitive::Callback(_) => todo!(),
+                Primitive::Callback(_callback) => {
+                    // TODO
+                }
             }
         }
 
-        let vertex_buf_size = (vertices.len() * std::mem::size_of::<Vertex>()) as vk::DeviceSize;
-        let index_buf_size = (indices.len() * std::mem::size_of::<u32>()) as vk::DeviceSize;
+        let vertex_buf_size = (vertices.len() * size_of::<Vertex>()) as vk::DeviceSize;
+        let index_buf_size = (indices.len() * size_of::<u32>()) as vk::DeviceSize;
 
         if vertex_buf_size > self.vertices.size {
             let new_vertices = AllocatedBuffer::new(
@@ -189,7 +191,7 @@ impl GuiIntegration {
                     .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
                     .sharing_mode(vk::SharingMode::EXCLUSIVE)
                     .size(vertex_buf_size),
-                vma::MemoryUsage::CpuToGpu,
+                vma::MemoryUsage::AutoPreferHost,
             );
             self.vertices_to_destroy.push((self.frames_in_flight, std::mem::replace(&mut self.vertices, new_vertices)));
         }
@@ -200,7 +202,7 @@ impl GuiIntegration {
                     .usage(vk::BufferUsageFlags::INDEX_BUFFER)
                     .sharing_mode(vk::SharingMode::EXCLUSIVE)
                     .size(index_buf_size),
-                vma::MemoryUsage::CpuToGpu,
+                vma::MemoryUsage::AutoPreferHost,
             );
             self.indices_to_destroy.push((self.frames_in_flight, std::mem::replace(&mut self.indices, new_indices)));
         }

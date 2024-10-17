@@ -3,13 +3,13 @@ mod shaders;
 
 use std::{
     borrow::Borrow,
+    path::PathBuf,
     sync::{Arc, RwLock},
+    time::{Duration, Instant},
 };
-use std::time::{Duration, Instant};
 
-use egui::{ClippedPrimitive, TextureOptions, TexturesDelta};
-use erupt::{utils::surface, vk, DeviceLoader, EntryLoader, ExtendableFrom, InstanceLoader, SmallVec, ObjectHandle};
-use erupt::vk::API_VERSION_1_3;
+use egui::{ClippedPrimitive, FullOutput, TextureOptions, TexturesDelta, ViewportId, ViewportInfo, ViewportOutput};
+use erupt::{utils::surface, vk, DeviceLoader, EntryLoader, ExtendableFrom, InstanceLoader, ObjectHandle, SmallVec};
 use erupt_bootstrap as vkb;
 use eruptrace_deferred::DeferredRayTracer;
 use eruptrace_pure::PureRayTracer;
@@ -22,7 +22,12 @@ use eruptrace_vk::{
     AllocatedImage,
 };
 use vk_mem_3_erupt as vma;
-use winit::window::Window;
+use winit::{
+    application::ApplicationHandler,
+    event::WindowEvent,
+    event_loop::ActiveEventLoop,
+    window::{Window, WindowId},
+};
 
 use crate::gui::{widgets, GuiIntegration};
 
@@ -32,7 +37,29 @@ enum RendererChoice {
     Deferred,
 }
 
+pub struct EruptraceArgs {
+    scene_path: PathBuf,
+}
+
+impl EruptraceArgs {
+    pub fn parse_args() -> Result<Self, pico_args::Error> {
+        let mut pargs = pico_args::Arguments::from_env();
+        let args = Self { scene_path: pargs.free_from_str()? };
+        Ok(args)
+    }
+}
+
 pub struct App {
+    args:      EruptraceArgs,
+    window:    Option<Window>,
+    app_state: Option<AppState>,
+}
+
+pub struct AppState {
+    egui_context:     egui::Context,
+    egui_winit_state: egui_winit::State,
+    viewport_info:    ViewportInfo,
+
     _entry:                EntryLoader,
     debug_messenger:       Option<vk::DebugUtilsMessengerEXT>,
     instance:              Option<Arc<InstanceLoader>>,
@@ -65,12 +92,82 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(window: &Window, rt_camera: Camera, scene: Scene) -> anyhow::Result<Self> {
+    pub fn new(args: EruptraceArgs) -> Self {
+        Self { args, window: None, app_state: None }
+    }
+
+    fn init(&mut self, event_loop: &ActiveEventLoop) {
+        self.window = Some(event_loop.create_window(Window::default_attributes()).unwrap());
+
+        let (camera, scene) = Scene::load(&self.args.scene_path).unwrap();
+        self.app_state = Some(AppState::new(event_loop, self.window.as_ref().unwrap(), camera, scene).unwrap());
+    }
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let was_uninitialised = matches!(&self.window, None);
+        if was_uninitialised {
+            self.init(event_loop);
+        }
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
+        let window = self.window.as_ref().unwrap();
+        let app_state = self.app_state.as_mut().unwrap();
+        let egui_context = app_state.egui_context.clone();
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Resized(size) => {
+                let [width, height]: [u32; 2] = size.into();
+                app_state.resize(vk::Extent2D { width, height })
+            }
+            WindowEvent::RedrawRequested => {
+                let new_input = app_state.egui_winit_state.take_egui_input(&self.window.as_ref().unwrap());
+                let FullOutput { platform_output, textures_delta, shapes, pixels_per_point, viewport_output } =
+                    egui_context.run(new_input, |egui_context| app_state.gui(egui_context));
+
+                if viewport_output.len() > 1 {
+                    eprintln!("Multiple viewports are not supported");
+                }
+                for (_, ViewportOutput { commands, .. }) in viewport_output {
+                    let mut actions_requested: egui::ahash::HashSet<egui_winit::ActionRequested> = Default::default();
+                    egui_winit::process_viewport_commands(
+                        &app_state.egui_context,
+                        &mut app_state.viewport_info,
+                        commands,
+                        window,
+                        &mut actions_requested,
+                    );
+                    for action in actions_requested {
+                        eprintln!("{action:?} not supported");
+                    }
+                }
+
+                app_state.egui_winit_state.handle_platform_output(&self.window.as_ref().unwrap(), platform_output);
+                let clipped_primitives = app_state.egui_context.tessellate(shapes, pixels_per_point);
+                app_state.render(&textures_delta, clipped_primitives);
+            }
+            event => {
+                let response = app_state.egui_winit_state.on_window_event(self.window.as_ref().unwrap(), &event);
+                if !response.consumed {
+                    // pass input into the engine (there isn't any need to at the moment)
+                }
+                if response.repaint {
+                    self.window.as_ref().unwrap().request_redraw();
+                }
+            }
+        }
+    }
+}
+
+impl AppState {
+    pub fn new(event_loop: &ActiveEventLoop, window: &Window, rt_camera: Camera, scene: Scene) -> anyhow::Result<Self> {
         let entry = EntryLoader::new()?;
         let (instance, debug_messenger, instance_meta) = {
             let builder = vkb::InstanceBuilder::new()
                 .request_api_version(1, 3)
-                .require_surface_extensions(window)
+                .require_surface_extensions(&window)
                 .expect("Cannot get surface extensions")
                 .app_name("ErupTrace")?
                 .validation_layers(vkb::ValidationLayers::Request)
@@ -83,7 +180,7 @@ impl App {
         };
 
         let surface = unsafe {
-            surface::create_surface(instance.as_ref().unwrap(), window, None).expect("Cannot create surface")
+            surface::create_surface(instance.as_ref().unwrap(), &window, None).expect("Cannot create surface")
         };
 
         let (device, device_meta, queue, queue_family) = {
@@ -196,9 +293,9 @@ impl App {
                 flags:                           vma::AllocatorCreateFlags::empty(),
                 preferred_large_heap_block_size: 0,
                 heap_size_limits:                None,
-                allocation_callbacks: None,
-                device_memory_callbacks: None,
-                vulkan_api_version: API_VERSION_1_3,
+                allocation_callbacks:            None,
+                device_memory_callbacks:         None,
+                vulkan_api_version:              vk::API_VERSION_1_3,
             };
             let allocator = vma::Allocator::new(&create_info).expect("Cannot create memory allocator");
             Some(Arc::new(RwLock::new(allocator)))
@@ -233,7 +330,20 @@ impl App {
             rt_scene_buffers.as_ref().unwrap(),
         )?);
 
+        let egui_context = egui::Context::default();
+        let egui_winit_state = egui_winit::State::new(
+            egui_context.clone(),
+            ViewportId::ROOT,
+            window,
+            None,
+            event_loop.system_theme(),
+            None,
+        );
+
         Ok(Self {
+            egui_context,
+            egui_winit_state,
+            viewport_info: Default::default(),
             _entry: entry,
             debug_messenger,
             instance,
@@ -285,70 +395,62 @@ impl App {
         egui::SidePanel::left("panel-settings").show(ctx, |ui| {
             ui.heading("Settings");
 
-            egui::CollapsingHeader::new("Renderer")
-                .default_open(true)
-                .show(ui, |ui| {
-                    ui.radio_value(&mut self.renderer_choice, RendererChoice::Pure, "Pure");
-                    ui.radio_value(&mut self.renderer_choice, RendererChoice::Deferred, "Deferred");
-                });
+            egui::CollapsingHeader::new("Renderer").default_open(true).show(ui, |ui| {
+                ui.radio_value(&mut self.renderer_choice, RendererChoice::Pure, "Pure");
+                ui.radio_value(&mut self.renderer_choice, RendererChoice::Deferred, "Deferred");
+            });
 
-            egui::CollapsingHeader::new("Render options")
-                .default_open(true)
-                .show(ui, |ui| {
-                    if ui.checkbox(&mut self.use_bih, "Use BIH").clicked() {
-                        self.rt_push_constants.flags.set(RtFlags::USE_BIH, self.use_bih);
-                    }
-                    if ui.checkbox(&mut self.render_normals, "Render normals").clicked() {
-                        self.rt_push_constants.flags.set(RtFlags::RENDER_NORMALS, self.render_normals);
-                    }
-                    if ui.checkbox(&mut self.render_bih, "Render BIH").clicked() {
-                        self.rt_push_constants.flags.set(RtFlags::RENDER_BIH, self.render_bih);
-                    }
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut self.rt_push_constants.draw_bih_level).clamp_range(0..=4096).speed(1));
-                        ui.label("Draw BIH level");
-                    });
+            egui::CollapsingHeader::new("Render options").default_open(true).show(ui, |ui| {
+                if ui.checkbox(&mut self.use_bih, "Use BIH").clicked() {
+                    self.rt_push_constants.flags.set(RtFlags::USE_BIH, self.use_bih);
+                }
+                if ui.checkbox(&mut self.render_normals, "Render normals").clicked() {
+                    self.rt_push_constants.flags.set(RtFlags::RENDER_NORMALS, self.render_normals);
+                }
+                if ui.checkbox(&mut self.render_bih, "Render BIH").clicked() {
+                    self.rt_push_constants.flags.set(RtFlags::RENDER_BIH, self.render_bih);
+                }
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.rt_push_constants.draw_bih_level).range(0..=4096).speed(1));
+                    ui.label("Draw BIH level");
                 });
+            });
 
-            egui::CollapsingHeader::new("Image size")
-                .default_open(true)
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut self.rt_camera.img_size[0]).clamp_range(1..=4096).speed(1));
-                        ui.label("Width");
-                    });
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut self.rt_camera.img_size[1]).clamp_range(1..=4096).speed(1));
-                        ui.label("Height");
-                    });
+            egui::CollapsingHeader::new("Image size").default_open(true).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.rt_camera.img_size[0]).range(1..=4096).speed(1));
+                    ui.label("Width");
                 });
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.rt_camera.img_size[1]).range(1..=4096).speed(1));
+                    ui.label("Height");
+                });
+            });
 
-            egui::CollapsingHeader::new("Camera")
-                .default_open(true)
-                .show(ui, |ui| {
-                    ui.label("Position");
-                    widgets::drag_vec3(ui, &mut self.rt_camera.position);
-                    ui.label("Look at");
-                    widgets::drag_vec3(ui, &mut self.rt_camera.look_at);
-                    ui.label("Up");
-                    widgets::drag_vec3(ui, &mut self.rt_camera.up);
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut self.rt_camera.vertical_fov).clamp_range(0.0..=360.0).speed(0.1));
-                        ui.label("Vertical FOV");
-                    });
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut self.rt_camera.max_reflections).clamp_range(1..=100).speed(1));
-                        ui.label("Max reflections");
-                    });
-                    let sample_count_choices = vec!["1x", "4x", "9x", "16x", "25x", "36x", "49x", "64x", "81x", "100x"];
-                    egui::ComboBox::from_label("Sample count")
-                        .selected_text(sample_count_choices[self.rt_camera.sqrt_samples as usize - 1])
-                        .show_ui(ui, |ui| {
-                            for (choice, label) in sample_count_choices.into_iter().enumerate() {
-                                ui.selectable_value(&mut self.rt_camera.sqrt_samples, choice as u32 + 1, label);
-                            }
-                        });
+            egui::CollapsingHeader::new("Camera").default_open(true).show(ui, |ui| {
+                ui.label("Position");
+                widgets::drag_vec3(ui, &mut self.rt_camera.position);
+                ui.label("Look at");
+                widgets::drag_vec3(ui, &mut self.rt_camera.look_at);
+                ui.label("Up");
+                widgets::drag_vec3(ui, &mut self.rt_camera.up);
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.rt_camera.vertical_fov).range(0.0..=360.0).speed(0.1));
+                    ui.label("Vertical FOV");
                 });
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.rt_camera.max_reflections).range(1..=100).speed(1));
+                    ui.label("Max reflections");
+                });
+                let sample_count_choices = vec!["1x", "4x", "9x", "16x", "25x", "36x", "49x", "64x", "81x", "100x"];
+                egui::ComboBox::from_label("Sample count")
+                    .selected_text(sample_count_choices[self.rt_camera.sqrt_samples as usize - 1])
+                    .show_ui(ui, |ui| {
+                        for (choice, label) in sample_count_choices.into_iter().enumerate() {
+                            ui.selectable_value(&mut self.rt_camera.sqrt_samples, choice as u32 + 1, label);
+                        }
+                    });
+            });
 
             if ui.button("Render").clicked() {
                 self.render_scene(ctx);
@@ -419,7 +521,7 @@ impl App {
                 .usage(vk::BufferUsageFlags::TRANSFER_DST)
                 .size((4 * extent.width * extent.height) as vk::DeviceSize)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            AllocatedBuffer::<u8>::new(vk_ctx.allocator.clone(), &buffer_info, vma::MemoryUsage::CpuOnly)
+            AllocatedBuffer::<u8>::new(vk_ctx.allocator.clone(), &buffer_info, vma::MemoryUsage::AutoPreferHost)
         };
 
         target_image.copy_to_buffer(vk_ctx.clone(), &image_data_buffer);
@@ -431,10 +533,10 @@ impl App {
             let color_image =
                 egui::ColorImage::from_rgba_unmultiplied(self.rt_camera.img_size.map(|d| d as usize), data);
             image_data_buffer.allocator.read().unwrap().unmap_memory(&image_data_buffer.allocation);
-            egui::ImageData::Color(color_image.into())
+            egui::ImageData::Color(Arc::new(color_image))
         };
 
-        self.target_texture.replace(egui_ctx.load_texture("scene", image_data, TextureOptions::default()));
+        self.target_texture.replace(egui_ctx.load_texture("scene", image_data, TextureOptions::LINEAR));
 
         image_data_buffer.destroy();
         target_image.destroy(&vk_ctx.device);
@@ -586,7 +688,7 @@ impl App {
     }
 }
 
-impl Drop for App {
+impl Drop for AppState {
     fn drop(&mut self) {
         unsafe {
             let device = self.device.as_ref().unwrap();

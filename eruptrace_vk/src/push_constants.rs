@@ -2,7 +2,6 @@ use bitflags::bitflags;
 use nalgebra_glm as glm;
 
 bitflags! {
-    #[derive(Copy, Clone, Debug)]
     pub struct RtFlags: u32 {
         const USE_BIH = 1 << 0;
         const RENDER_NORMALS = 1 << 1;

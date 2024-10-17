@@ -27,11 +27,8 @@ impl AllocatedImage {
         view_type: vk::ImageViewType,
         subresource_range: vk::ImageSubresourceRange,
     ) -> Self {
-        let allocation_info = vma::AllocationCreateInfo {
-            usage: vma::MemoryUsage::GpuOnly,
-            flags: vma::AllocationCreateFlags::DEDICATED_MEMORY | vma::AllocationCreateFlags::MAPPED,
-            ..Default::default()
-        };
+        let allocation_info =
+            vma::AllocationCreateInfo { usage: vma::MemoryUsage::AutoPreferDevice, ..Default::default() };
 
         let (image, allocation, allocation_info) = vk_ctx
             .allocator
@@ -235,7 +232,7 @@ impl AllocatedImage {
             let buffer_info = vk::BufferCreateInfoBuilder::new()
                 .usage(vk::BufferUsageFlags::TRANSFER_SRC)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
-            AllocatedBuffer::with_data(self.allocator.clone(), &buffer_info, vma::MemoryUsage::CpuOnly, data)
+            AllocatedBuffer::with_data(self.allocator.clone(), &buffer_info, vma::MemoryUsage::AutoPreferHost, data)
         };
 
         command::immediate_submit(vk_ctx, |device, command_buffer| unsafe {
